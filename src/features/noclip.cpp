@@ -55,6 +55,7 @@ uint8_t g_dbgB27 = 0;
 bool    g_dbgB25 = false;
 int     g_dbgDmg = 0;
 bool    g_dbgHadTile = false;
+bool    g_manual = false;  // held engaged by SocketFu (not the auto wall logic)
 
 // ---------------------------------------------------------------------------
 // DB_TileQuery (sub_1800C9AF0) reimplementation - returns whether the cell at
@@ -165,27 +166,11 @@ void __fastcall hkCollision(uintptr_t a1, uint32_t a2) {
     static bool once = false;
     if (!once) { once = true; DBLOG("hkCollision: first call"); }
 
-    if (g_cfg.autoNoClip) {
-        uintptr_t player = game::Player();
-        if (player) {
-            const float x = *reinterpret_cast<float*>(player + ga::off::OBJ_X);
-            const float y = *reinterpret_cast<float*>(player + ga::off::OBJ_Y);
-            const bool wall = TileIsWall(x, y);
-            if (wall)
-                g_onWall = true;
-
-            static ULONGLONG lastLog = 0;
-            ULONGLONG now = GetTickCount64();
-            if (now - lastLog > 1000) {
-                lastLog = now;
-                DBLOG("hkCollision: pos=(%.2f,%.2f) wall=%d gate=%d eng=%d | tile=%d type=%d obj1698=%d b27=%d b25=%d dmg=%d",
-                      x, y, (int)wall, (int)g_gate.load(std::memory_order_acquire),
-                      (int)g_engaged, (int)g_dbgHadTile, g_dbgType, (int)g_dbgObj1698,
-                      (int)g_dbgB27, (int)g_dbgB25, g_dbgDmg);
-            }
-        }
-    }
-
+    // Detection is driven by the move target (NoteMoveTarget), not by the
+    // resolved player tile - the player's own cell is always clamped to floor,
+    // so it can never reveal a wall being walked into. Here we only enforce the
+    // gate: when noclip is engaged, skip the original collision resolver so the
+    // player isn't pushed back out of the wall.
     if (!g_gate.load(std::memory_order_acquire)) {
         if (g_orig)
             g_orig(a1, a2);
@@ -194,8 +179,41 @@ void __fastcall hkCollision(uintptr_t a1, uint32_t a2) {
 
 } // namespace
 
+// Called from the move hook (HookMoveUpdate) with the player's requested
+// destination - the pre-collision tile they are trying to step onto. This is
+// where a wall actually shows up (the resolved player position never does).
+void NoteMoveTarget(float x, float y) {
+    if (!g_cfg.autoNoClip)
+        return;
+    const bool wall = TileIsWall(x, y);
+    if (wall)
+        g_onWall = true;
+
+    static ULONGLONG lastLog = 0;
+    ULONGLONG now = GetTickCount64();
+    if (now - lastLog > 1000) {
+        lastLog = now;
+        DBLOG("noclip target=(%.2f,%.2f) wall=%d gate=%d eng=%d | tile=%d type=%d obj1698=%d b27=%d b25=%d dmg=%d",
+              x, y, (int)wall, (int)g_gate.load(std::memory_order_acquire),
+              (int)g_engaged, (int)g_dbgHadTile, g_dbgType, (int)g_dbgObj1698,
+              (int)g_dbgB27, (int)g_dbgB25, g_dbgDmg);
+    }
+}
+
 bool GateActive() {
     return g_gate.load(std::memory_order_acquire);
+}
+
+// Manual hold (SocketFu): engage/keep the noclip gate regardless of the auto
+// wall logic. Poll() yields to this so the two don't fight over the gate.
+void SetManual(bool on) {
+    if (on == g_manual)
+        return;
+    g_manual = on;
+    if (on)
+        Engage();
+    else
+        Disengage();
 }
 
 void Install() {
@@ -217,6 +235,10 @@ void Tick() {
 // the tail of DB_InputThread: engage when on a wall, disengage 250ms after
 // clearing. g_onWall is set by the collision detour and reset here each tick.
 void Poll() {
+    if (g_manual) {        // SocketFu owns the gate; leave it engaged
+        g_onWall = false;
+        return;
+    }
     if (!g_cfg.autoNoClip) {
         if (g_engaged)
             Disengage();

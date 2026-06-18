@@ -25,6 +25,7 @@ namespace ga {
 // Forward declarations into the feature layer (avoids a heavy include here).
 namespace features { void GameTick(); }
 namespace noclip   { bool GateActive(); }
+namespace lagport  { bool FreezeActive(); }
 
 namespace game {
     static std::atomic<uintptr_t> g_root{0};
@@ -99,8 +100,8 @@ namespace game {
         static bool once = false;
         if (!once) { once = true; DBLOG("hkGameTick: first call a1=%p", (void*)a1); }
         features::GameTick();
-        if (noclip::GateActive())
-            return 0;                       // noclip: suppress this frame's update
+        if (noclip::GateActive() || lagport::FreezeActive())
+            return 0;                       // noclip / lag-port: suppress this frame's update
         return oGameTick ? oGameTick(a1) : 0;
     }
 

@@ -27,11 +27,11 @@ struct Config {
     float colorText[4] = { 1.00f, 1.00f, 1.00f, 1.00f };
 
     // Mods.
-    bool  useSpeed1 = false;
+    bool  useSpeed1 = true;        // unk_1801B31CD default = 1 (use speed 1)
     bool  showCurrentSpeed = false;
     int   speedHackHotkey = 0;
-    float speedhackSpeed1 = 1.0f;
-    float speedhackSpeed2 = 2.0f;
+    float speedhackSpeed1 = 1.1f;  // DB_InitDefaults dword_1801B2D20 = 1.1
+    float speedhackSpeed2 = 2.0f;  // DB_InitDefaults dword_1801B2D24 = 2.0
     int   speedToggleKey = 0;
     bool  noFog = false;
     bool  socketFu = false;
@@ -42,6 +42,8 @@ struct Config {
     bool  autoNoClip = false;
     bool  antiIdle = false;
     float cameraZoomScale = 1.0f;
+    bool  lagPort = false;       // freeze client while lagPortHotkey is held
+    Keybind lagPortHotkey;
 
     // Auto Nexus.
     bool  autoNexus = true;
@@ -68,7 +70,7 @@ struct Config {
     Keybind dodgingHotkey;
     bool  dodgeInvisible = false;
     bool  butterWalk = true;
-    float dodgeHitboxSize = 0.451f;
+    float dodgeHitboxSize = 0.456f; // dword_1801B2CCC default 0.455999911
     int   dodgeMoveAwayMs = 200;
     bool  dodgeAoeBombs = true;
     bool  dodgeAvoidUnits = true;
@@ -77,6 +79,8 @@ struct Config {
     bool  teleportIfOutOfRange = false;
     bool  nexusWhenLost = false;
     float dogeTeleportMax = 0.0f;
+    Keybind tpCaptureHotkey;   // mark current spot as the teleport anchor
+    Keybind tpReturnHotkey;    // teleport back to the anchor
 
     // Render / loot.
     bool  enablePoisBags = true;
@@ -103,6 +107,9 @@ struct Config {
     bool  enableGlow = false;
     bool  rainbowGlow = false;
     int   glowStyle = 0;
+    // Outline RGBA (dword_1801AFB98..A4) and glow RGBA (dword_1801AFBF8..C04).
+    float glowOutline[4] = { 1.0f, 1.0f, 0.5f, 0.8f };
+    float glowColor[4]   = { 0.0f, 1.0f, 0.5f, 0.8f };
     bool  showFpm = false;
     bool  fameValue = false;
     float fameValueAmount = 0.0f;

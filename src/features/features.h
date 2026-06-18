@@ -11,8 +11,14 @@ namespace features {
 namespace aim       { void Install(); void Tick(); }
 namespace dodge     { void Install(); void Tick(); }
 namespace nexus     { void Install(); void Tick(); void Poll(); }
-namespace speedhack { void Install(); void Tick(); }
+namespace speedhack { void Install(); void Tick(); float CurrentSpeed(); }
 namespace loot      { void Install(); void Tick(); }
 namespace glow      { void Install(); void Tick(); }
 namespace fame      { void Install(); void Tick(); }
-namespace noclip    { void Install(); void Tick(); void Poll(); bool GateActive(); }
+namespace noclip    { void Install(); void Tick(); void Poll(); bool GateActive();
+                      void NoteMoveTarget(float x, float y); void SetManual(bool on); }
+namespace mods      { void Install(); void Tick(); }
+namespace hud       { void Tick(); }
+namespace socketfu  { void Install(); void Tick(); }
+namespace lagport   { void Install(); void Tick(); bool FreezeActive(); }
+namespace teleport  { void Install(); void Tick(); void Poll(); }

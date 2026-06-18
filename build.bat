@@ -41,7 +41,7 @@ if /i "%config%"=="Debug" set "flags=/nologo /W4 /WX- /MP /Od /Zi /MDd /DDEBUG /
 set "inc=/I"%src%" /I"%imgui%" /I"%imgui%\backends" /I"%minhook%\include" /I"%minhook%\src""
 
 set "cpp_sources="%src%\dllmain.cpp" "%src%\hooks.cpp" "%src%\overlay.cpp" "%src%\menu.cpp" "%src%\config.cpp" "%src%\il2cpp.cpp" "%src%\util.cpp" "%src%\log.cpp""
-set "cpp_sources=%cpp_sources% "%src%\features\features.cpp" "%src%\features\aim.cpp" "%src%\features\dodge.cpp" "%src%\features\nexus.cpp" "%src%\features\speedhack.cpp" "%src%\features\loot.cpp" "%src%\features\glow.cpp" "%src%\features\fame.cpp" "%src%\features\noclip.cpp""
+set "cpp_sources=%cpp_sources% "%src%\features\features.cpp" "%src%\features\aim.cpp" "%src%\features\dodge.cpp" "%src%\features\nexus.cpp" "%src%\features\speedhack.cpp" "%src%\features\loot.cpp" "%src%\features\glow.cpp" "%src%\features\fame.cpp" "%src%\features\noclip.cpp" "%src%\features\mods.cpp" "%src%\features\hud.cpp" "%src%\features\socketfu.cpp" "%src%\features\lagport.cpp" "%src%\features\teleport.cpp""
 set "cpp_sources=%cpp_sources% "%imgui%\imgui.cpp" "%imgui%\imgui_draw.cpp" "%imgui%\imgui_tables.cpp" "%imgui%\imgui_widgets.cpp""
 set "cpp_sources=%cpp_sources% "%imgui%\backends\imgui_impl_dx11.cpp" "%imgui%\backends\imgui_impl_win32.cpp""
 

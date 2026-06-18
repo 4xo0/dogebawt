@@ -107,6 +107,8 @@ void Config_Load() {
     CFG_BOOL(socketFuUseSecondSpeed); CFG_BOOL(socketFuRestrictMovement);
     CFG_BOOL(socketFuNoClip); CFG_BOOL(autoNoClip); CFG_BOOL(antiIdle);
     CFG_FLOAT(cameraZoomScale);
+    CFG_BOOL(lagPort);
+    g_cfg.lagPortHotkey.vk = ReadInt("lagPortHotkey", g_cfg.lagPortHotkey.vk);
 
     CFG_BOOL(autoNexus); CFG_BOOL(autoNexusDisplay); CFG_FLOAT(autoNexusHpValue);
     CFG_BOOL(autoNexusUsePercent); CFG_FLOAT(autoNexusHpPercent);
@@ -123,6 +125,8 @@ void Config_Load() {
     CFG_INT(dodgeMoveAwayMs); CFG_BOOL(dodgeAoeBombs); CFG_BOOL(dodgeAvoidUnits);
     CFG_FLOAT(dodgeUnitAvoidanceScale); CFG_BOOL(oldDodgeLogic);
     CFG_BOOL(teleportIfOutOfRange); CFG_BOOL(nexusWhenLost); CFG_FLOAT(dogeTeleportMax);
+    g_cfg.tpCaptureHotkey.vk = ReadInt("tpCaptureHotkey", g_cfg.tpCaptureHotkey.vk);
+    g_cfg.tpReturnHotkey.vk = ReadInt("tpReturnHotkey", g_cfg.tpReturnHotkey.vk);
 
     CFG_BOOL(enablePoisBags); CFG_BOOL(playSoundForBags);
     CFG_BOOL(bagEgg); CFG_BOOL(bagBrown); CFG_BOOL(bagPink); CFG_BOOL(bagPurple);
@@ -133,6 +137,8 @@ void Config_Load() {
     CFG_BOOL(renderSafetyPath);
 
     CFG_BOOL(enableGlow); CFG_BOOL(rainbowGlow); CFG_INT(glowStyle);
+    LoadColor("glowOutline", g_cfg.glowOutline);
+    LoadColor("glowColor", g_cfg.glowColor);
     CFG_BOOL(showFpm); CFG_BOOL(fameValue); CFG_FLOAT(fameValueAmount);
     CFG_BOOL(accountFame); CFG_FLOAT(accountFameValue);
 
@@ -161,6 +167,8 @@ void Config_Save() {
     SAVE_BOOL(socketFuUseSecondSpeed); SAVE_BOOL(socketFuRestrictMovement);
     SAVE_BOOL(socketFuNoClip); SAVE_BOOL(autoNoClip); SAVE_BOOL(antiIdle);
     SAVE_FLOAT(cameraZoomScale);
+    SAVE_BOOL(lagPort);
+    WriteInt("lagPortHotkey", g_cfg.lagPortHotkey.vk);
 
     SAVE_BOOL(autoNexus); SAVE_BOOL(autoNexusDisplay); SAVE_FLOAT(autoNexusHpValue);
     SAVE_BOOL(autoNexusUsePercent); SAVE_FLOAT(autoNexusHpPercent);
@@ -177,6 +185,8 @@ void Config_Save() {
     SAVE_INT(dodgeMoveAwayMs); SAVE_BOOL(dodgeAoeBombs); SAVE_BOOL(dodgeAvoidUnits);
     SAVE_FLOAT(dodgeUnitAvoidanceScale); SAVE_BOOL(oldDodgeLogic);
     SAVE_BOOL(teleportIfOutOfRange); SAVE_BOOL(nexusWhenLost); SAVE_FLOAT(dogeTeleportMax);
+    WriteInt("tpCaptureHotkey", g_cfg.tpCaptureHotkey.vk);
+    WriteInt("tpReturnHotkey", g_cfg.tpReturnHotkey.vk);
 
     SAVE_BOOL(enablePoisBags); SAVE_BOOL(playSoundForBags);
     SAVE_BOOL(bagEgg); SAVE_BOOL(bagBrown); SAVE_BOOL(bagPink); SAVE_BOOL(bagPurple);
@@ -187,6 +197,8 @@ void Config_Save() {
     SAVE_BOOL(renderSafetyPath);
 
     SAVE_BOOL(enableGlow); SAVE_BOOL(rainbowGlow); SAVE_INT(glowStyle);
+    SaveColor("glowOutline", g_cfg.glowOutline);
+    SaveColor("glowColor", g_cfg.glowColor);
     SAVE_BOOL(showFpm); SAVE_BOOL(fameValue); SAVE_FLOAT(fameValueAmount);
     SAVE_BOOL(accountFame); SAVE_FLOAT(accountFameValue);
     WritePrivateProfileStringA(nullptr, nullptr, nullptr, s_path);

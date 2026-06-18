@@ -134,10 +134,15 @@ namespace menu {
         }
 
         void FollowTab() {
-            ImGui::TextUnformatted("Follow Settings");
+            ImGui::TextUnformatted("Follow / Teleport Settings");
             ImGui::Separator();
-            ImGui::TextDisabled("Follow hooks are not part of the current feature layer.");
+            LabelHotkey("Set Anchor (capture)", "tpCaptureHotkey", g_cfg.tpCaptureHotkey);
+            LabelHotkey("Teleport to Anchor", "tpReturnHotkey", g_cfg.tpReturnHotkey);
+            ImGui::Spacing();
             ImGui::Checkbox("Teleport if Out of Range", &g_cfg.teleportIfOutOfRange);
+            ImGui::SliderFloat("Teleport Max Distance", &g_cfg.dogeTeleportMax, 0.0f, 1.5f, "%.2f");
+            ImGui::TextWrapped("With Teleport if Out of Range on, you snap back to the "
+                               "anchor whenever you drift past Max Distance tiles from it.");
             ImGui::Checkbox("Nexus When Lost", &g_cfg.nexusWhenLost);
         }
 
@@ -192,8 +197,8 @@ namespace menu {
             ImGui::Separator();
             ImGui::TextDisabled("Identity and appearance hooks are not part of the current feature layer.");
             ImGui::Checkbox("Enable Glow", &g_cfg.enableGlow);
-            ImGui::RadioButton("Outline", &g_cfg.glowStyle, 0); ImGui::SameLine();
-            ImGui::RadioButton("Glow", &g_cfg.glowStyle, 1);
+            ImGui::ColorEdit4("Outline", g_cfg.glowOutline);
+            ImGui::ColorEdit4("Glow", g_cfg.glowColor);
             ImGui::Checkbox("Rainbow Glow", &g_cfg.rainbowGlow);
             ImGui::Checkbox("Fame Value", &g_cfg.fameValue);
             if (g_cfg.fameValue) ImGui::InputFloat("##FameValue", &g_cfg.fameValueAmount);
@@ -292,7 +297,10 @@ namespace menu {
             if (ImGui::BeginTabItem("\t\tLag Port")) {
                 ImGui::TextUnformatted("Lag Port Settings");
                 ImGui::Separator();
-                ImGui::TextDisabled("Lag-port hooks are not part of the current feature layer.");
+                ImGui::Checkbox("Lag Port", &g_cfg.lagPort);
+                LabelHotkey("Lag Port Key (hold)", "lagPortHotkey", g_cfg.lagPortHotkey);
+                ImGui::TextWrapped("Holding the key freezes the client. Will lag client, "
+                                   "don't use near projectiles otherwise you may die.");
                 ImGui::EndTabItem();
             }
             if (ImGui::BeginTabItem("\t\tAuto Dodge")) { DodgeTab(); ImGui::EndTabItem(); }

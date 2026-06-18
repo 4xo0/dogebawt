@@ -27,6 +27,12 @@ namespace features {
         fame::Install();
         DBLOG("InstallAll: noclip::Install");
         noclip::Install();
+        DBLOG("InstallAll: mods::Install");
+        mods::Install();
+        DBLOG("InstallAll: socketfu::Install");
+        socketfu::Install();
+        DBLOG("InstallAll: lagport::Install");
+        lagport::Install();
         DBLOG("InstallAll: MH_EnableHook(ALL)");
         MH_STATUS st = MH_EnableHook(MH_ALL_HOOKS);
         DBLOG("InstallAll: MH_EnableHook returned %d", (int)st);
@@ -51,6 +57,14 @@ namespace features {
         fame::Tick();
         if (firstTick) DBLOG("Tick#1: noclip");
         noclip::Tick();
+        if (firstTick) DBLOG("Tick#1: mods");
+        mods::Tick();
+        if (firstTick) DBLOG("Tick#1: hud");
+        hud::Tick();
+        if (firstTick) DBLOG("Tick#1: socketfu");
+        socketfu::Tick();
+        if (firstTick) DBLOG("Tick#1: lagport");
+        lagport::Tick();
         if (firstTick) { DBLOG("Tick#1: complete"); firstTick = false; }
     }
 
@@ -59,5 +73,6 @@ namespace features {
     void GameTick() {
         nexus::Poll();
         noclip::Poll();
+        teleport::Poll();
     }
 }

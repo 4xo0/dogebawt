@@ -67,8 +67,9 @@ constexpr uintptr_t kPlayerUpdateRva = 0xA45AD0;
 
 // dword_1801B2CCC = 0x3EE978B9; dword_1801B2CD0 = 200; dword_1801B2CDC = 0x3CA3D70A;
 // dword_1801B2CE0 = 0x42740000. All read straight from the binary.
-constexpr float kHitboxHalf = 0.455999911f;   // 0x3EE978B9
-constexpr int kMoveAwayBufferMs = 200;
+// Hit Box Size (dword_1801B2CCC, default 0.456) and Move Away Buffer
+// (dword_1801B2CD0, default 200) are user-tunable in the original: read them
+// from config (g_cfg.dodgeHitboxSize / dodgeMoveAwayMs) rather than hardcoding.
 constexpr float kCandidatePadding = 0.06f;
 constexpr float kDangerWeight = 0.02f;         // 0x3CA3D70A
 constexpr float kDistanceWeight = 61.0f;       // 0x42740000
@@ -272,7 +273,8 @@ bool PositionSafe(Vec2 position, int gameTime, const std::vector<Threat>& threat
     safeForMs = kNoThreatTime;
     if (threats.empty()) return true;
 
-    const float hitboxSq = kHitboxHalf * kHitboxHalf;
+    const float hitboxHalf = g_cfg.dodgeHitboxSize;
+    const float hitboxSq = hitboxHalf * hitboxHalf;
     bool safe = true;
     for (const Threat& threat : threats) {
         if (threat.path.empty()) continue;
@@ -345,7 +347,7 @@ Ring BuildRing(Vec2 center, float scale, float density, int gameTime,
                const std::vector<Threat>& threats) {
     const int directions = std::max(
         1, static_cast<int>(static_cast<int>(scale * 16.0f) * density));
-    const float radius = (kHitboxHalf + kCandidatePadding) * scale;
+    const float radius = (g_cfg.dodgeHitboxSize + kCandidatePadding) * scale;
 
     Ring ring;
     ring.candidates.reserve(directions);
@@ -425,6 +427,11 @@ float MoveSpeed(uintptr_t player) {
 // sub_18002A0C0 and is intentionally not reproduced here (it is Sleep-based and
 // only governs idle auto-dodge re-centering, not the dodge decision itself).
 int64_t __fastcall HookMoveUpdate(uintptr_t player, float targetX, float targetY) {
+    // Auto-noclip detection: the requested destination ({targetX, -targetY}) is
+    // the pre-collision tile the player is trying to step onto - the only place
+    // a wall being walked into is visible. Runs regardless of the dodge toggle.
+    noclip::NoteMoveTarget(targetX, -targetY);
+
     if (!g_cfg.dodgeProjectiles || !player)
         return g_originalMoveUpdate ? g_originalMoveUpdate(player, targetX, targetY) : 0;
 
@@ -466,7 +473,7 @@ int64_t __fastcall HookMoveUpdate(uintptr_t player, float targetX, float targetY
         // the requested cell gets hit before the player could cross half a
         // hitbox; otherwise allow it (the move only grazes the danger).
         Vec2 output = requested;
-        if (kHitboxHalf / speed > static_cast<float>(requestedSafeFor))
+        if (g_cfg.dodgeHitboxSize / speed > static_cast<float>(requestedSafeFor))
             output = current;
         return g_originalMoveUpdate ? g_originalMoveUpdate(player, output.x, -output.y) : 0;
     }
@@ -477,7 +484,7 @@ int64_t __fastcall HookMoveUpdate(uintptr_t player, float targetX, float targetY
     if (chosen.position.x != 0.0f || chosen.position.y != 0.0f) {
         const float distance = Distance(current, chosen.position);
         const int travelMs = static_cast<int>(distance / speed);
-        if (static_cast<int>(requestedSafeFor) - kMoveAwayBufferMs <= travelMs) {
+        if (static_cast<int>(requestedSafeFor) - g_cfg.dodgeMoveAwayMs <= travelMs) {
             const float fraction =
                 distance > 0.0f
                     ? std::min(1.0f, static_cast<float>(frameMs) * speed / distance)
