@@ -46,6 +46,15 @@ constexpr ULONGLONG kOffWallGraceMs = 250; // DB_InputThread's 250ms disengage d
 using CollisionFn = void(__fastcall*)(uintptr_t, uint32_t);
 CollisionFn g_orig = nullptr;
 
+// The real noclip: two move-validity predicates the game consults. We force
+// their results while the gate is up, and use the "can move" predicate's raw
+// result as the actual wall detector (matches sub_180087B60 / sub_180087B30).
+constexpr uintptr_t kCanMoveRva = 0x1CB2230; // qword_1801B27B8 (sub_180087B60)
+constexpr uintptr_t kIsSolidRva = 0x1CB0C50; // qword_1801B27D8 (sub_180087B30)
+using PredFn = int64_t(__fastcall*)(uintptr_t, uintptr_t, uintptr_t, uintptr_t);
+PredFn g_origCanMove = nullptr;
+PredFn g_origIsSolid = nullptr;
+
 std::atomic<bool> g_gate{false};   // word_1801B3240: block collision + per-frame update
 bool      g_engaged = false;       // patch currently applied
 uint32_t  g_originalDword = kPatchRestoreDefault;
@@ -182,6 +191,30 @@ void __fastcall hkCollision(uintptr_t a1, uint32_t a2) {
     }
 }
 
+// sub_180087B60: the game's "can move here?" predicate. Its RAW result is the
+// real wall detector (false = blocked); while the gate is up we force it true
+// so the player walks through. Order matters: detect from the raw result first,
+// THEN apply the override (so we keep detecting walls while phasing).
+int64_t __fastcall hkCanMove(uintptr_t a1, uintptr_t a2, uintptr_t a3, uintptr_t a4) {
+    static bool once = false;
+    if (!once) { once = true; DBLOG("hkCanMove: first call"); }
+    const int64_t r = g_origCanMove ? g_origCanMove(a1, a2, a3, a4) : 0;
+    if (!(static_cast<uint8_t>(r)) && g_cfg.autoNoClip)
+        g_onWall = true;                                  // blocked move = wall
+    if (g_gate.load(std::memory_order_acquire))
+        return 1;                                         // phase: force valid
+    return r;
+}
+
+// sub_180087B30: the "is solid?" predicate. While the gate is up force it false
+// (not solid) so the player isn't blocked.
+int64_t __fastcall hkIsSolid(uintptr_t a1, uintptr_t a2, uintptr_t a3, uintptr_t a4) {
+    const int64_t r = g_origIsSolid ? g_origIsSolid(a1, a2, a3, a4) : 0;
+    if (g_gate.load(std::memory_order_acquire))
+        return 0;                                         // phase: force not solid
+    return r;
+}
+
 } // namespace
 
 // Called from the move hook (HookMoveUpdate) with the player's requested
@@ -230,6 +263,22 @@ void Install() {
     const MH_STATUS st = MH_CreateHook(target, reinterpret_cast<void*>(&hkCollision),
                                        reinterpret_cast<void**>(&g_orig));
     DBLOG("noclip::Install: MH_CreateHook=%d orig=%p", (int)st, (void*)g_orig);
+
+    // The real noclip predicates: "can move" (force true) + "is solid" (force false).
+    void* canMove = ga::Rva(kCanMoveRva);
+    if (canMove) {
+        const MH_STATUS s = MH_CreateHook(canMove, reinterpret_cast<void*>(&hkCanMove),
+                                          reinterpret_cast<void**>(&g_origCanMove));
+        DBLOG("noclip::Install: can-move target=%p (GA+0x%llX) MH=%d",
+              canMove, (unsigned long long)kCanMoveRva, (int)s);
+    }
+    void* isSolid = ga::Rva(kIsSolidRva);
+    if (isSolid) {
+        const MH_STATUS s = MH_CreateHook(isSolid, reinterpret_cast<void*>(&hkIsSolid),
+                                          reinterpret_cast<void**>(&g_origIsSolid));
+        DBLOG("noclip::Install: is-solid target=%p (GA+0x%llX) MH=%d",
+              isSolid, (unsigned long long)kIsSolidRva, (int)s);
+    }
 }
 
 void Tick() {
