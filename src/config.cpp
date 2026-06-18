@@ -1,0 +1,193 @@
+#include "config.h"
+
+#include <windows.h>
+#include <shlobj.h>
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+
+Config g_cfg;
+
+namespace {
+    char s_path[MAX_PATH]{};
+
+    void BuildPath() {
+        if (s_path[0]) return;
+
+        // Original: SHGetFolderPathA(nullptr, CSIDL_PERSONAL, ..., path), then
+        // append "\\rotmgv2.cf" (sub_180008890 @ 0x1800088e9..0x180008aff).
+        if (SUCCEEDED(SHGetFolderPathA(nullptr, CSIDL_PERSONAL, nullptr,
+                                      SHGFP_TYPE_CURRENT, s_path))) {
+            std::strncat(s_path, "\\rotmgv2.cf", MAX_PATH - std::strlen(s_path) - 1);
+            return;
+        }
+
+        GetModuleFileNameA(nullptr, s_path, MAX_PATH);
+        char* slash = std::strrchr(s_path, '\\');
+        if (slash) slash[1] = '\0';
+        std::strncat(s_path, "rotmgv2.cf", MAX_PATH - std::strlen(s_path) - 1);
+    }
+
+    int ReadInt(const char* key, int value) {
+        return GetPrivateProfileIntA("DogeBawt", key, value, Config_Path());
+    }
+
+    float ReadFloat(const char* key, float value) {
+        char fallback[32], text[64];
+        std::snprintf(fallback, sizeof(fallback), "%.9g", value);
+        GetPrivateProfileStringA("DogeBawt", key, fallback, text, sizeof(text), Config_Path());
+        char* end = nullptr;
+        const float parsed = std::strtof(text, &end);
+        return (end && end != text) ? parsed : value;
+    }
+
+    void WriteInt(const char* key, int value) {
+        char text[32];
+        std::snprintf(text, sizeof(text), "%d", value);
+        WritePrivateProfileStringA("DogeBawt", key, text, Config_Path());
+    }
+
+    void WriteFloat(const char* key, float value) {
+        char text[32];
+        std::snprintf(text, sizeof(text), "%.9g", value);
+        WritePrivateProfileStringA("DogeBawt", key, text, Config_Path());
+    }
+
+#define CFG_BOOL(name) g_cfg.name = ReadInt(#name, g_cfg.name ? 1 : 0) != 0
+#define CFG_INT(name) g_cfg.name = ReadInt(#name, g_cfg.name)
+#define CFG_FLOAT(name) g_cfg.name = ReadFloat(#name, g_cfg.name)
+#define SAVE_BOOL(name) WriteInt(#name, g_cfg.name ? 1 : 0)
+#define SAVE_INT(name) WriteInt(#name, g_cfg.name)
+#define SAVE_FLOAT(name) WriteFloat(#name, g_cfg.name)
+
+    void LoadColor(const char* key, float (&color)[4]) {
+        char component[64];
+        for (int i = 0; i < 4; ++i) {
+            std::snprintf(component, sizeof(component), "%s%d", key, i);
+            color[i] = std::clamp(ReadFloat(component, color[i]), 0.0f, 1.0f);
+        }
+    }
+
+    void SaveColor(const char* key, const float (&color)[4]) {
+        char component[64];
+        for (int i = 0; i < 4; ++i) {
+            std::snprintf(component, sizeof(component), "%s%d", key, i);
+            WriteFloat(component, color[i]);
+        }
+    }
+}
+
+const char* Config_Path() {
+    BuildPath();
+    return s_path;
+}
+
+void Config_Load() {
+    BuildPath();
+    if (GetFileAttributesA(s_path) == INVALID_FILE_ATTRIBUTES) return;
+
+    CFG_INT(menuToggleHotkey);
+    CFG_INT(menuTheme);
+    CFG_BOOL(menuBackground);
+    CFG_BOOL(titleBarActive);
+    CFG_BOOL(sideBarBackground);
+    LoadColor("colorMenuBackground", g_cfg.colorMenuBackground);
+    LoadColor("colorTitleActive", g_cfg.colorTitleActive);
+    LoadColor("colorSidebar", g_cfg.colorSidebar);
+    LoadColor("colorBase", g_cfg.colorBase);
+    LoadColor("colorHover", g_cfg.colorHover);
+    LoadColor("colorActive", g_cfg.colorActive);
+    LoadColor("colorCheck", g_cfg.colorCheck);
+    LoadColor("colorText", g_cfg.colorText);
+
+    CFG_BOOL(useSpeed1); CFG_BOOL(showCurrentSpeed); CFG_INT(speedHackHotkey);
+    CFG_FLOAT(speedhackSpeed1); CFG_FLOAT(speedhackSpeed2); CFG_INT(speedToggleKey);
+    CFG_BOOL(noFog); CFG_BOOL(socketFu); CFG_BOOL(showSocketFuTimer);
+    CFG_BOOL(socketFuUseSecondSpeed); CFG_BOOL(socketFuRestrictMovement);
+    CFG_BOOL(socketFuNoClip); CFG_BOOL(autoNoClip); CFG_BOOL(antiIdle);
+    CFG_FLOAT(cameraZoomScale);
+
+    CFG_BOOL(autoNexus); CFG_BOOL(autoNexusDisplay); CFG_FLOAT(autoNexusHpValue);
+    CFG_BOOL(autoNexusUsePercent); CFG_FLOAT(autoNexusHpPercent);
+    CFG_BOOL(detectServerHits);
+
+    CFG_BOOL(autoAim); CFG_BOOL(magnetAim); CFG_BOOL(magnetRangeExt);
+    CFG_INT(targetingStyle); CFG_FLOAT(magnetAimRange);
+    CFG_BOOL(projectileNoClip); CFG_BOOL(renderAimInfo);
+    g_cfg.aimbotHotkey.vk = ReadInt("aimbotHotkey", g_cfg.aimbotHotkey.vk);
+
+    CFG_BOOL(autoDodge); CFG_BOOL(dodgeProjectiles); CFG_BOOL(dodgeHoldToToggle);
+    g_cfg.dodgingHotkey.vk = ReadInt("dodgingHotkey", g_cfg.dodgingHotkey.vk);
+    CFG_BOOL(dodgeInvisible); CFG_BOOL(butterWalk); CFG_FLOAT(dodgeHitboxSize);
+    CFG_INT(dodgeMoveAwayMs); CFG_BOOL(dodgeAoeBombs); CFG_BOOL(dodgeAvoidUnits);
+    CFG_FLOAT(dodgeUnitAvoidanceScale); CFG_BOOL(oldDodgeLogic);
+    CFG_BOOL(teleportIfOutOfRange); CFG_BOOL(nexusWhenLost); CFG_FLOAT(dogeTeleportMax);
+
+    CFG_BOOL(enablePoisBags); CFG_BOOL(playSoundForBags);
+    CFG_BOOL(bagEgg); CFG_BOOL(bagBrown); CFG_BOOL(bagPink); CFG_BOOL(bagPurple);
+    CFG_BOOL(bagCyan); CFG_BOOL(bagDarkBlue); CFG_BOOL(bagWhite); CFG_BOOL(bagGold);
+    CFG_BOOL(bagOrange); CFG_BOOL(bagRed);
+    CFG_BOOL(renderProjectiles); CFG_BOOL(renderAoeDebug); CFG_BOOL(renderTiles);
+    CFG_BOOL(renderUnits); CFG_BOOL(renderHitbox); CFG_BOOL(renderGrid);
+    CFG_BOOL(renderSafetyPath);
+
+    CFG_BOOL(enableGlow); CFG_BOOL(rainbowGlow); CFG_INT(glowStyle);
+    CFG_BOOL(showFpm); CFG_BOOL(fameValue); CFG_FLOAT(fameValueAmount);
+    CFG_BOOL(accountFame); CFG_FLOAT(accountFameValue);
+
+    g_cfg.menuToggleHotkey = std::clamp(g_cfg.menuToggleHotkey, 0, 0xFF);
+    g_cfg.targetingStyle = std::clamp(g_cfg.targetingStyle, 0, 2);
+    g_cfg.magnetAimRange = std::clamp(g_cfg.magnetAimRange, 1.0f, 2.25f);
+    g_cfg.autoNexusHpPercent = std::clamp(g_cfg.autoNexusHpPercent, 0.0f, 99.99f);
+}
+
+void Config_Save() {
+    BuildPath();
+    WritePrivateProfileStringA("DogeBawt", nullptr, nullptr, s_path);
+
+    SAVE_INT(menuToggleHotkey); SAVE_INT(menuTheme);
+    SAVE_BOOL(menuBackground); SAVE_BOOL(titleBarActive); SAVE_BOOL(sideBarBackground);
+    SaveColor("colorMenuBackground", g_cfg.colorMenuBackground);
+    SaveColor("colorTitleActive", g_cfg.colorTitleActive);
+    SaveColor("colorSidebar", g_cfg.colorSidebar);
+    SaveColor("colorBase", g_cfg.colorBase); SaveColor("colorHover", g_cfg.colorHover);
+    SaveColor("colorActive", g_cfg.colorActive); SaveColor("colorCheck", g_cfg.colorCheck);
+    SaveColor("colorText", g_cfg.colorText);
+
+    SAVE_BOOL(useSpeed1); SAVE_BOOL(showCurrentSpeed); SAVE_INT(speedHackHotkey);
+    SAVE_FLOAT(speedhackSpeed1); SAVE_FLOAT(speedhackSpeed2); SAVE_INT(speedToggleKey);
+    SAVE_BOOL(noFog); SAVE_BOOL(socketFu); SAVE_BOOL(showSocketFuTimer);
+    SAVE_BOOL(socketFuUseSecondSpeed); SAVE_BOOL(socketFuRestrictMovement);
+    SAVE_BOOL(socketFuNoClip); SAVE_BOOL(autoNoClip); SAVE_BOOL(antiIdle);
+    SAVE_FLOAT(cameraZoomScale);
+
+    SAVE_BOOL(autoNexus); SAVE_BOOL(autoNexusDisplay); SAVE_FLOAT(autoNexusHpValue);
+    SAVE_BOOL(autoNexusUsePercent); SAVE_FLOAT(autoNexusHpPercent);
+    SAVE_BOOL(detectServerHits);
+
+    SAVE_BOOL(autoAim); SAVE_BOOL(magnetAim); SAVE_BOOL(magnetRangeExt);
+    SAVE_INT(targetingStyle); SAVE_FLOAT(magnetAimRange);
+    SAVE_BOOL(projectileNoClip); SAVE_BOOL(renderAimInfo);
+    WriteInt("aimbotHotkey", g_cfg.aimbotHotkey.vk);
+
+    SAVE_BOOL(autoDodge); SAVE_BOOL(dodgeProjectiles); SAVE_BOOL(dodgeHoldToToggle);
+    WriteInt("dodgingHotkey", g_cfg.dodgingHotkey.vk);
+    SAVE_BOOL(dodgeInvisible); SAVE_BOOL(butterWalk); SAVE_FLOAT(dodgeHitboxSize);
+    SAVE_INT(dodgeMoveAwayMs); SAVE_BOOL(dodgeAoeBombs); SAVE_BOOL(dodgeAvoidUnits);
+    SAVE_FLOAT(dodgeUnitAvoidanceScale); SAVE_BOOL(oldDodgeLogic);
+    SAVE_BOOL(teleportIfOutOfRange); SAVE_BOOL(nexusWhenLost); SAVE_FLOAT(dogeTeleportMax);
+
+    SAVE_BOOL(enablePoisBags); SAVE_BOOL(playSoundForBags);
+    SAVE_BOOL(bagEgg); SAVE_BOOL(bagBrown); SAVE_BOOL(bagPink); SAVE_BOOL(bagPurple);
+    SAVE_BOOL(bagCyan); SAVE_BOOL(bagDarkBlue); SAVE_BOOL(bagWhite); SAVE_BOOL(bagGold);
+    SAVE_BOOL(bagOrange); SAVE_BOOL(bagRed);
+    SAVE_BOOL(renderProjectiles); SAVE_BOOL(renderAoeDebug); SAVE_BOOL(renderTiles);
+    SAVE_BOOL(renderUnits); SAVE_BOOL(renderHitbox); SAVE_BOOL(renderGrid);
+    SAVE_BOOL(renderSafetyPath);
+
+    SAVE_BOOL(enableGlow); SAVE_BOOL(rainbowGlow); SAVE_INT(glowStyle);
+    SAVE_BOOL(showFpm); SAVE_BOOL(fameValue); SAVE_FLOAT(fameValueAmount);
+    SAVE_BOOL(accountFame); SAVE_FLOAT(accountFameValue);
+    WritePrivateProfileStringA(nullptr, nullptr, nullptr, s_path);
+}

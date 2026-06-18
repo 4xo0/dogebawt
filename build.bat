@@ -1,0 +1,60 @@
+@echo off
+setlocal EnableDelayedExpansion
+
+rem ===========================================================================
+rem  DogeBawt remake build  -  produces dist\dogebawt.dll
+rem  Byte-faithful C++ reimplementation of the KevAquila ROTMG DX11Hook cheat.
+rem  Toolchain mirrors realmsense\build.bat (MSVC cl/link).
+rem ===========================================================================
+
+set "config=%~1"
+if "%config%"=="" set "config=Release"
+
+set "root=%~dp0"
+set "src=%root%src"
+set "out=%root%dist"
+set "obj=%out%\obj"
+set "imgui=%root%vendor\imgui"
+set "minhook=%root%vendor\minhook"
+
+where cl.exe >nul 2>&1
+if not errorlevel 1 goto have_cl
+
+set "vswhere=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+if not exist "%vswhere%" exit /b 1
+
+for /f "usebackq tokens=*" %%I in (
+    `"%vswhere%" -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -find VC\Auxiliary\Build\vcvarsall.bat`
+) do (
+    call "%%I" x64
+    goto have_cl
+)
+exit /b 1
+
+:have_cl
+if not exist "%out%" mkdir "%out%"
+if not exist "%obj%" mkdir "%obj%"
+
+set "flags=/nologo /W4 /WX- /MP /O2 /MD /DNDEBUG /DWIN32 /D_WINDOWS /DNOMINMAX /D_CRT_SECURE_NO_WARNINGS /D_WIN32_WINNT=0x0A00"
+if /i "%config%"=="Debug" set "flags=/nologo /W4 /WX- /MP /Od /Zi /MDd /DDEBUG /DWIN32 /D_WINDOWS /DNOMINMAX /D_CRT_SECURE_NO_WARNINGS /D_WIN32_WINNT=0x0A00"
+
+set "inc=/I"%src%" /I"%imgui%" /I"%imgui%\backends" /I"%minhook%\include" /I"%minhook%\src""
+
+set "cpp_sources="%src%\dllmain.cpp" "%src%\hooks.cpp" "%src%\overlay.cpp" "%src%\menu.cpp" "%src%\config.cpp" "%src%\il2cpp.cpp" "%src%\util.cpp" "%src%\log.cpp""
+set "cpp_sources=%cpp_sources% "%src%\features\features.cpp" "%src%\features\aim.cpp" "%src%\features\dodge.cpp" "%src%\features\nexus.cpp" "%src%\features\speedhack.cpp" "%src%\features\loot.cpp" "%src%\features\glow.cpp" "%src%\features\fame.cpp" "%src%\features\noclip.cpp""
+set "cpp_sources=%cpp_sources% "%imgui%\imgui.cpp" "%imgui%\imgui_draw.cpp" "%imgui%\imgui_tables.cpp" "%imgui%\imgui_widgets.cpp""
+set "cpp_sources=%cpp_sources% "%imgui%\backends\imgui_impl_dx11.cpp" "%imgui%\backends\imgui_impl_win32.cpp""
+
+set "c_sources="%minhook%\src\buffer.c" "%minhook%\src\hook.c" "%minhook%\src\trampoline.c" "%minhook%\src\hde\hde64.c""
+
+pushd "%out%"
+cl %flags% /std:c11 %inc% /c %c_sources% /Fo:"%obj%\\"
+if errorlevel 1 ( popd & exit /b 1 )
+cl %flags% /EHsc /std:c++17 %inc% /c %cpp_sources% /Fo:"%obj%\\"
+if errorlevel 1 ( popd & exit /b 1 )
+link /nologo /DLL /OUT:dogebawt.dll /PDB:dogebawt.pdb "%obj%\*.obj" kernel32.lib user32.lib gdi32.lib shell32.lib shcore.lib d3d11.lib dxgi.lib /MACHINE:X64
+set "result=%errorlevel%"
+popd
+
+if not "%result%"=="0" exit /b %result%
+echo [build] %out%\dogebawt.dll

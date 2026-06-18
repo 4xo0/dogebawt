@@ -1,0 +1,18 @@
+// features.h - feature subsystem registry. Each feature installs its own
+// GameAssembly detours / byte patches and exposes a per-frame Tick if needed.
+#pragma once
+
+namespace features {
+    void InstallAll();   // called once after GameAssembly + DX hooks are up
+    void Tick();         // per-frame, called from the Present hook (overlay / render thread)
+    void GameTick();     // per-frame, called from the game-thread update hook (GA-call safe)
+}
+
+namespace aim       { void Install(); void Tick(); }
+namespace dodge     { void Install(); void Tick(); }
+namespace nexus     { void Install(); void Tick(); void Poll(); }
+namespace speedhack { void Install(); void Tick(); }
+namespace loot      { void Install(); void Tick(); }
+namespace glow      { void Install(); void Tick(); }
+namespace fame      { void Install(); void Tick(); }
+namespace noclip    { void Install(); void Tick(); void Poll(); bool GateActive(); }
