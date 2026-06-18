@@ -195,7 +195,15 @@ namespace menu {
         void SpooferTab() {
             ImGui::TextUnformatted("Spoofing Settings");
             ImGui::Separator();
-            ImGui::TextDisabled("Identity and appearance hooks are not part of the current feature layer.");
+            ImGui::TextUnformatted("Identity");
+            ImGui::Checkbox("Name", &g_cfg.spoofName);
+            ImGui::InputText("New Name", g_cfg.spoofNameValue,
+                             sizeof(g_cfg.spoofNameValue));
+            ImGui::TextDisabled("Client-side display spoof; longer names are truncated.");
+            ImGui::Checkbox("Stars", &g_cfg.stars);
+            if (g_cfg.stars)
+                ImGui::SliderInt("Stars Value", &g_cfg.starsValue, 0, 100);
+            ImGui::Separator();
             ImGui::Checkbox("Enable Glow", &g_cfg.enableGlow);
             ImGui::ColorEdit4("Outline", g_cfg.glowOutline);
             ImGui::ColorEdit4("Glow", g_cfg.glowColor);

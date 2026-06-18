@@ -23,7 +23,7 @@ struct Config {
     float colorBase[4] = { 0.80f, 0.20f, 0.60f, 1.00f };
     float colorHover[4] = { 1.00f, 0.40f, 0.80f, 1.00f };
     float colorActive[4] = { 1.00f, 0.20f, 0.70f, 1.00f };
-    float colorCheck[4] = { 1.00f, 0.35f, 0.80f, 1.00f };
+    float colorCheck[4] = { 0.00f, 1.00f, 0.00f, 1.00f }; // dogebawt: green check (xmmword_1801AFBC8)
     float colorText[4] = { 1.00f, 1.00f, 1.00f, 1.00f };
 
     // Mods.
@@ -111,6 +111,10 @@ struct Config {
     float glowOutline[4] = { 1.0f, 1.0f, 0.5f, 0.8f };
     float glowColor[4]   = { 0.0f, 1.0f, 0.5f, 0.8f };
     bool  showFpm = false;
+    bool  spoofName = false;
+    char  spoofNameValue[25] = {};
+    bool  stars = false;
+    int   starsValue = 0;
     bool  fameValue = false;
     float fameValueAmount = 0.0f;
     bool  accountFame = false;

@@ -54,6 +54,21 @@ namespace {
         WritePrivateProfileStringA("DogeBawt", key, text, Config_Path());
     }
 
+    void ReadString(const char* key, char* value, size_t capacity) {
+        if (!value || !capacity)
+            return;
+        char fallback[256]{};
+        std::strncpy(fallback, value, sizeof(fallback) - 1);
+        GetPrivateProfileStringA("DogeBawt", key, fallback, value,
+                                 static_cast<DWORD>(capacity), Config_Path());
+        value[capacity - 1] = '\0';
+    }
+
+    void WriteString(const char* key, const char* value) {
+        WritePrivateProfileStringA("DogeBawt", key, value ? value : "",
+                                   Config_Path());
+    }
+
 #define CFG_BOOL(name) g_cfg.name = ReadInt(#name, g_cfg.name ? 1 : 0) != 0
 #define CFG_INT(name) g_cfg.name = ReadInt(#name, g_cfg.name)
 #define CFG_FLOAT(name) g_cfg.name = ReadFloat(#name, g_cfg.name)
@@ -139,13 +154,18 @@ void Config_Load() {
     CFG_BOOL(enableGlow); CFG_BOOL(rainbowGlow); CFG_INT(glowStyle);
     LoadColor("glowOutline", g_cfg.glowOutline);
     LoadColor("glowColor", g_cfg.glowColor);
-    CFG_BOOL(showFpm); CFG_BOOL(fameValue); CFG_FLOAT(fameValueAmount);
+    CFG_BOOL(showFpm); CFG_BOOL(spoofName);
+    ReadString("spoofNameValue", g_cfg.spoofNameValue,
+               sizeof(g_cfg.spoofNameValue));
+    CFG_BOOL(stars); CFG_INT(starsValue);
+    CFG_BOOL(fameValue); CFG_FLOAT(fameValueAmount);
     CFG_BOOL(accountFame); CFG_FLOAT(accountFameValue);
 
     g_cfg.menuToggleHotkey = std::clamp(g_cfg.menuToggleHotkey, 0, 0xFF);
     g_cfg.targetingStyle = std::clamp(g_cfg.targetingStyle, 0, 2);
     g_cfg.magnetAimRange = std::clamp(g_cfg.magnetAimRange, 1.0f, 2.25f);
     g_cfg.autoNexusHpPercent = std::clamp(g_cfg.autoNexusHpPercent, 0.0f, 99.99f);
+    g_cfg.starsValue = std::clamp(g_cfg.starsValue, 0, 100);
 }
 
 void Config_Save() {
@@ -199,7 +219,10 @@ void Config_Save() {
     SAVE_BOOL(enableGlow); SAVE_BOOL(rainbowGlow); SAVE_INT(glowStyle);
     SaveColor("glowOutline", g_cfg.glowOutline);
     SaveColor("glowColor", g_cfg.glowColor);
-    SAVE_BOOL(showFpm); SAVE_BOOL(fameValue); SAVE_FLOAT(fameValueAmount);
+    SAVE_BOOL(showFpm); SAVE_BOOL(spoofName);
+    WriteString("spoofNameValue", g_cfg.spoofNameValue);
+    SAVE_BOOL(stars); SAVE_INT(starsValue);
+    SAVE_BOOL(fameValue); SAVE_FLOAT(fameValueAmount);
     SAVE_BOOL(accountFame); SAVE_FLOAT(accountFameValue);
     WritePrivateProfileStringA(nullptr, nullptr, nullptr, s_path);
 }

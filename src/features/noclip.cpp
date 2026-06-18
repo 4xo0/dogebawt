@@ -34,8 +34,13 @@ namespace {
 // GA+0xA31F1C dword: engaged value written by DB_PatchGA_A31A1C / DB_InputThread
 // (1079948815). The original restores 0x415E0C0F (1096726031); we capture the
 // live bytes on first engage and restore those, with that as the fallback.
-constexpr uint32_t kPatchEngage = 0x405E0C0Fu; // == 1079948815
-constexpr uint32_t kPatchRestoreDefault = 0x415E0C0Fu; // == 1096726031
+// GA+0xA31F1C is `movzx ebx, [rsi+0x41]` (0F B6 5E 41). Noclip flips the
+// displacement to +0x40 (0F B6 5E 40) so the collision check reads the wrong
+// (non-solid) flag byte. Values are the exact dwords from DB_PatchGA_A31A1C /
+// sub_18002D010 (verified: 1079948815 / 1096726031). A wrong value here writes a
+// bogus instruction over live code and crashes the game.
+constexpr uint32_t kPatchEngage = 0x405EB60Fu;         // == 1079948815  (read [rsi+0x40])
+constexpr uint32_t kPatchRestoreDefault = 0x415EB60Fu; // == 1096726031  (read [rsi+0x41])
 constexpr ULONGLONG kOffWallGraceMs = 250; // DB_InputThread's 250ms disengage delay
 
 using CollisionFn = void(__fastcall*)(uintptr_t, uint32_t);

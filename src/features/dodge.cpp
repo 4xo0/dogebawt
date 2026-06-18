@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <unordered_map>
 #include <vector>
 #include "MinHook.h"
 
@@ -40,6 +41,10 @@ struct Threat {
     int objectType;
     float lifetimeMs;
     bool visible;
+    float minX;
+    float maxX;
+    float minY;
+    float maxY;
     std::vector<PathPoint> path;
 };
 
@@ -60,9 +65,6 @@ constexpr uintptr_t kMoveUpdateRva = 0xA3E470;
 constexpr uintptr_t kMoveSpeedRva = 0xA44B00;
 // Late assignment at DB_InstallHooks+0x2E0; called by sub_1800C9CA0.
 constexpr uintptr_t kProjectilePositionRva = 0x7282F0;
-// Player.Update(now, delta) - obf "GJFKGLJEGKO" on player_class. Same game
-// build as realmsense (its input_update fallback GA+0x11B5560 == our root fn),
-// so this fallback RVA is valid here too.
 constexpr uintptr_t kPlayerUpdateRva = 0xA45AD0;
 
 // dword_1801B2CCC = 0x3EE978B9; dword_1801B2CD0 = 200; dword_1801B2CDC = 0x3CA3D70A;
@@ -184,22 +186,41 @@ int CurrentGameTime(uintptr_t world) {
     return world ? *reinterpret_cast<int*>(world + 128) : 0;
 }
 
-bool ShooterVisible(int attacker) {
-    if (g_cfg.dodgeInvisible) return true;
+using VisibilityMap = std::unordered_map<int, bool>;
+
+VisibilityMap SnapshotVisibility() {
+    VisibilityMap visibility;
+    if (g_cfg.dodgeInvisible)
+        return visibility;
+
     const uintptr_t root = game::Root();
     const uintptr_t world = root ? *reinterpret_cast<uintptr_t*>(root + 40) : 0;
     const uintptr_t manager = world ? *reinterpret_cast<uintptr_t*>(world + 176) : 0;
     const uintptr_t list = manager ? *reinterpret_cast<uintptr_t*>(manager + 24) : 0;
-    if (!list) return true;
+    if (!list) return visibility;
+
     const uint32_t count = *reinterpret_cast<uint32_t*>(list + 24);
-    if (count >= 20000) return true;
+    if (count >= 20000) return visibility;
+    visibility.reserve(std::min<uint32_t>(count, 1024));
+
     for (uint32_t i = 0; i < count; ++i) {
         const uintptr_t object = *reinterpret_cast<uintptr_t*>(list + 48 + 24ull * i);
-        if (!object || *reinterpret_cast<int*>(object + 0x34) != attacker) continue;
+        if (!object) continue;
+        const int objectId = *reinterpret_cast<int*>(object + 0x34);
         const uintptr_t status = *reinterpret_cast<uintptr_t*>(object + 0x18);
-        return status && *reinterpret_cast<uint8_t*>(status + 1745) != 0;
+        visibility[objectId] =
+            status && *reinterpret_cast<uint8_t*>(status + 1745) != 0;
     }
-    // The original record starts true and only replaces it on an owner match.
+    return visibility;
+}
+
+bool ShooterVisible(int attacker, const VisibilityMap& visibility) {
+    if (g_cfg.dodgeInvisible) return true;
+    const auto found = visibility.find(attacker);
+    if (found != visibility.end())
+        return found->second;
+    // DogeBawt initializes the record as visible and only replaces it when an
+    // owner match exists in the object snapshot.
     return true;
 }
 
@@ -228,6 +249,7 @@ void GatherThreats(std::vector<Threat>& threats, int gameTime) {
     const uint32_t count = *reinterpret_cast<uint32_t*>(list + 24);
     if (!count || count >= 10000) return;
     threats.reserve(std::min<uint32_t>(count, 256));
+    const VisibilityMap visibility = SnapshotVisibility();
 
     for (uint32_t index = 0; index < count; ++index) {
         const uintptr_t projectile =
@@ -239,7 +261,9 @@ void GatherThreats(std::vector<Threat>& threats, int gameTime) {
         threat.startTime = *reinterpret_cast<int*>(projectile + 364);
         threat.attacker = *reinterpret_cast<int*>(projectile + 368);
         threat.lifetimeMs = *reinterpret_cast<float*>(projectile + 400);
-        threat.visible = ShooterVisible(threat.attacker);
+        threat.visible = ShooterVisible(threat.attacker, visibility);
+        threat.minX = threat.minY = std::numeric_limits<float>::infinity();
+        threat.maxX = threat.maxY = -std::numeric_limits<float>::infinity();
         const uintptr_t klass = *reinterpret_cast<uintptr_t*>(projectile + 24);
         threat.objectType = klass ? *reinterpret_cast<int*>(klass + 1700) : 0;
 
@@ -260,12 +284,47 @@ void GatherThreats(std::vector<Threat>& threats, int gameTime) {
             const float future = static_cast<float>(i) * interval;
             if (!ProjectilePosition(projectile, future, position)) break;
             threat.path.push_back({position, static_cast<int>(future)});
+            threat.minX = std::min(threat.minX, position.x);
+            threat.maxX = std::max(threat.maxX, position.x);
+            threat.minY = std::min(threat.minY, position.y);
+            threat.maxY = std::max(threat.maxY, position.y);
         }
         Vec2 finalPosition{};
-        if (ProjectilePosition(projectile, threat.lifetimeMs, finalPosition))
+        if (ProjectilePosition(projectile, threat.lifetimeMs, finalPosition)) {
             threat.path.push_back({finalPosition, static_cast<int>(threat.lifetimeMs)});
+            threat.minX = std::min(threat.minX, finalPosition.x);
+            threat.maxX = std::max(threat.maxX, finalPosition.x);
+            threat.minY = std::min(threat.minY, finalPosition.y);
+            threat.maxY = std::max(threat.maxY, finalPosition.y);
+        }
         if (!threat.path.empty()) threats.push_back(std::move(threat));
     }
+}
+
+bool SegmentHitBox(Vec2 from, Vec2 to, Vec2 center, float halfSize,
+                   float& entryFraction) {
+    float enter = 0.0f;
+    float leave = 1.0f;
+
+    const auto clipAxis = [&](float start, float delta, float minValue,
+                              float maxValue) -> bool {
+        if (std::fabs(delta) < 1e-7f)
+            return start > minValue && start < maxValue;
+        float a = (minValue - start) / delta;
+        float b = (maxValue - start) / delta;
+        if (a > b) std::swap(a, b);
+        enter = std::max(enter, a);
+        leave = std::min(leave, b);
+        return enter <= leave;
+    };
+
+    const float dx = to.x - from.x;
+    const float dy = to.y - from.y;
+    if (!clipAxis(from.x, dx, center.x - halfSize, center.x + halfSize) ||
+        !clipAxis(from.y, dy, center.y - halfSize, center.y + halfSize))
+        return false;
+    entryFraction = std::clamp(enter, 0.0f, 1.0f);
+    return leave >= 0.0f && enter <= 1.0f;
 }
 
 bool PositionSafe(Vec2 position, int gameTime, const std::vector<Threat>& threats,
@@ -278,6 +337,11 @@ bool PositionSafe(Vec2 position, int gameTime, const std::vector<Threat>& threat
     bool safe = true;
     for (const Threat& threat : threats) {
         if (threat.path.empty()) continue;
+        if (position.x + hitboxHalf <= threat.minX ||
+            position.x - hitboxHalf >= threat.maxX ||
+            position.y + hitboxHalf <= threat.minY ||
+            position.y - hitboxHalf >= threat.maxY)
+            continue;
 
         size_t first = 0;
         while (first + 1 < threat.path.size() &&
@@ -286,36 +350,24 @@ bool PositionSafe(Vec2 position, int gameTime, const std::vector<Threat>& threat
             ++first;
         if (first > 1) --first;
 
-        bool nearPrevious = false;
         for (size_t i = first; i < threat.path.size(); ++i) {
             const PathPoint& point = threat.path[i];
             const float dx = point.position.x - position.x;
             const float dy = point.position.y - position.y;
 
-            if (i && nearPrevious) {
+            if (i) {
                 const PathPoint& previous = threat.path[i - 1];
-                const unsigned span =
-                    static_cast<unsigned>(point.timeMs - previous.timeMs);
-                if (span >= 4) {
-                    for (unsigned step = 1; step < span; step += 2) {
-                        const float t = static_cast<float>(step) /
-                                        static_cast<float>(span);
-                        const float ix = previous.position.x +
-                                         (point.position.x - previous.position.x) * t;
-                        const float iy = previous.position.y +
-                                         (point.position.y - previous.position.y) * t;
-                        if ((ix - position.x) * (ix - position.x) < hitboxSq &&
-                            (iy - position.y) * (iy - position.y) < hitboxSq) {
-                            const unsigned hitTime =
-                                static_cast<unsigned>(threat.startTime +
-                                                      previous.timeMs + step);
-                            if (hitTime >= static_cast<unsigned>(gameTime)) {
-                                safeForMs = std::min(
-                                    safeForMs, hitTime - static_cast<unsigned>(gameTime));
-                                safe = false;
-                            }
-                            break;
-                        }
+                float entry = 0.0f;
+                if (SegmentHitBox(previous.position, point.position, position,
+                                  hitboxHalf, entry)) {
+                    const int span = point.timeMs - previous.timeMs;
+                    const unsigned hitTime = static_cast<unsigned>(
+                        threat.startTime + previous.timeMs +
+                        static_cast<int>(std::max(0, span) * entry));
+                    if (hitTime >= static_cast<unsigned>(gameTime)) {
+                        safeForMs = std::min(
+                            safeForMs, hitTime - static_cast<unsigned>(gameTime));
+                        safe = false;
                     }
                 }
             }
@@ -330,7 +382,6 @@ bool PositionSafe(Vec2 position, int gameTime, const std::vector<Threat>& threat
                     break;
                 }
             }
-            nearPrevious = dx * dx < 49.0f && dy * dy < 49.0f;
         }
     }
     return safe;
@@ -496,24 +547,25 @@ int64_t __fastcall HookMoveUpdate(uintptr_t player, float targetX, float targetY
     return g_originalMoveUpdate ? g_originalMoveUpdate(player, output.x, -output.y) : 0;
 }
 
-// Player.Update detour. Mirrors realmsense hook_player_update: each player
-// update, zero the float at props+0x788 (props = player+0x18). This neutralizes
-// a per-frame movement/push value so the player stays exactly where dodge puts
-// them. Done unconditionally, before the original, exactly like realmsense.
 using PlayerUpdateFn = char(__fastcall*)(void*, int32_t, int32_t, void*);
 PlayerUpdateFn g_originalPlayerUpdate = nullptr;
 
 char __fastcall HookPlayerUpdate(void* self, int32_t now, int32_t delta, void* method) {
     static bool once = false;
-    if (!once) { once = true; DBLOG("HookPlayerUpdate: first call self=%p", self); }
+    if (!once) {
+        once = true;
+        DBLOG("HookPlayerUpdate: first call self=%p", self);
+    }
 
     if (self) {
-        uintptr_t props = *reinterpret_cast<uintptr_t*>(
+        const uintptr_t props = *reinterpret_cast<uintptr_t*>(
             reinterpret_cast<uintptr_t>(self) + 0x18);
         if (props > 0xFFFF)
             *reinterpret_cast<float*>(props + 0x788) = 0.0f;
     }
-    return g_originalPlayerUpdate ? g_originalPlayerUpdate(self, now, delta, method) : 0;
+    return g_originalPlayerUpdate
+        ? g_originalPlayerUpdate(self, now, delta, method)
+        : 0;
 }
 
 } // namespace

@@ -73,6 +73,7 @@ namespace features {
     void GameTick() {
         nexus::Poll();
         noclip::Poll();
+        fame::Poll();
         teleport::Poll();
     }
 }

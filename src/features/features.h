@@ -14,7 +14,7 @@ namespace nexus     { void Install(); void Tick(); void Poll(); }
 namespace speedhack { void Install(); void Tick(); float CurrentSpeed(); }
 namespace loot      { void Install(); void Tick(); }
 namespace glow      { void Install(); void Tick(); }
-namespace fame      { void Install(); void Tick(); }
+namespace fame      { void Install(); void Tick(); void Poll(); }
 namespace noclip    { void Install(); void Tick(); void Poll(); bool GateActive();
                       void NoteMoveTarget(float x, float y); void SetManual(bool on); }
 namespace mods      { void Install(); void Tick(); }
