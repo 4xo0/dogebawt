@@ -3,6 +3,7 @@
 #include "config.h"
 #include "log.h"
 #include "features/features.h"
+#include "skin_catalog.h"
 
 #include "imgui.h"
 #include "imgui_impl_dx11.h"
@@ -89,21 +90,17 @@ namespace overlay {
         fontCfg.PixelSnapH = true;
 
         char dllPath[MAX_PATH]{};
-        char normalPath[MAX_PATH]{};
         char boldPath[MAX_PATH]{};
         HMODULE self = GetModuleHandleA("dogebawt.dll");
         GetModuleFileNameA(self, dllPath, MAX_PATH);
         char* slash = std::strrchr(dllPath, '\\');
         if (slash) *slash = '\0';
-        std::snprintf(normalPath, sizeof(normalPath), "%s\\font\\PixelOperator.ttf", dllPath);
         std::snprintf(boldPath, sizeof(boldPath), "%s\\font\\PixelOperator-Bold.ttf", dllPath);
 
-        ImFont* normal = io.Fonts->AddFontFromFileTTF(normalPath, fontSize, &fontCfg);
         ImFont* bold = io.Fonts->AddFontFromFileTTF(boldPath, fontSize, &fontCfg);
-        if (!normal) normal = io.Fonts->AddFontDefault(&fontCfg);
-        if (!bold) bold = normal;
-        io.FontDefault = normal;
-        menu::SetFonts(normal, bold);
+        if (!bold) bold = io.Fonts->AddFontDefault(&fontCfg);
+        io.FontDefault = bold;
+        menu::SetFonts(bold, bold);
 
         if (!ImGui_ImplWin32_Init(s_hwnd) || !ImGui_ImplDX11_Init(s_device, s_ctx)) {
             ImGui_ImplDX11_Shutdown();
@@ -172,6 +169,7 @@ namespace overlay {
         }
 
         menu::SetOpen(false);
+        skin_catalog::Shutdown();
         Config_Save();
         ImGui_ImplDX11_Shutdown();
         ImGui_ImplWin32_Shutdown();

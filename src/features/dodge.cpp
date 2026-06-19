@@ -77,6 +77,11 @@ constexpr float kDangerWeight = 0.02f;         // 0x3CA3D70A
 constexpr float kDistanceWeight = 61.0f;       // 0x42740000
 constexpr float kTwoPi = 6.2831855f;
 constexpr unsigned kNoThreatTime = 40000;
+// AoE/bomb objects (klass+1700 == 14174). sub_1800C9CA0 extends their modeled
+// lifetime by 500ms and never lets them expire, so the dodge keeps clearing the
+// blast for the full detonation window.
+constexpr int kAoeObjectType = 14174;
+constexpr float kAoeLifetimeBonusMs = 500.0f;
 
 using MoveUpdateFn = int64_t(__fastcall*)(uintptr_t, float, float);
 // The move-speed getter (GA+0xA44B00) is an il2cpp instance method: it reads
@@ -241,10 +246,10 @@ std::vector<Vec2> GatherEnemies() {
 
     for (uint32_t i = 0; i < count; ++i) {
         const uintptr_t object = *reinterpret_cast<uintptr_t*>(list + 48 + 24ull * i);
-        if (!object) continue;
+        if (object <= 0xFFFF) continue;
         if (*reinterpret_cast<int*>(object + 0x20C) <= 0) continue; // hp
         const uintptr_t status = *reinterpret_cast<uintptr_t*>(object + 0x18);
-        if (!status || *reinterpret_cast<uint8_t*>(status + 1745) == 0) continue;
+        if (status <= 0xFFFF || *reinterpret_cast<uint8_t*>(status + 1745) == 0) continue;
         enemies.push_back({ *reinterpret_cast<float*>(object + 0x3C),
                             *reinterpret_cast<float*>(object + 0x40) });
     }
@@ -259,6 +264,18 @@ float EnemyClearance(Vec2 p, const std::vector<Vec2>& enemies) {
         best = std::min(best, std::sqrt(dx * dx + dy * dy));
     }
     return best;
+}
+
+// sub_1800C9CA0 truncates a projectile's threat path at the first solid wall it
+// enters (tile types 4/5/34), so we stop dodging shots a wall already blocks. A
+// projectile flagged pass-through (its own props+369) ignores walls except type 5.
+bool ProjectileBlockedByWall(Vec2 p, bool passThrough) {
+    TileInfo tile;
+    if (!QueryTile(p, tile) || !tile.blocked)
+        return false;
+    if (passThrough)
+        return tile.type == 5;
+    return tile.type == 4 || tile.type == 5 || tile.type == 34;
 }
 
 bool ProjectilePosition(uintptr_t projectile, float futureMs, Vec2& out) {
@@ -291,7 +308,7 @@ void GatherThreats(std::vector<Threat>& threats, int gameTime) {
     for (uint32_t index = 0; index < count; ++index) {
         const uintptr_t projectile =
             *reinterpret_cast<uintptr_t*>(list + 48 + 24ull * index);
-        if (!projectile) continue;
+        if (projectile <= 0xFFFF) continue;
 
         Threat threat{};
         threat.object = projectile;
@@ -302,24 +319,44 @@ void GatherThreats(std::vector<Threat>& threats, int gameTime) {
         threat.minX = threat.minY = std::numeric_limits<float>::infinity();
         threat.maxX = threat.maxY = -std::numeric_limits<float>::infinity();
         const uintptr_t klass = *reinterpret_cast<uintptr_t*>(projectile + 24);
-        threat.objectType = klass ? *reinterpret_cast<int*>(klass + 1700) : 0;
+        threat.objectType = klass > 0xFFFF ? *reinterpret_cast<int*>(klass + 1700) : 0;
+
+        const bool isAoe = threat.objectType == kAoeObjectType;
+        if (isAoe) {
+            if (!g_cfg.dodgeAoeBombs)
+                continue;                          // AoE dodging off -> ignore bombs
+            threat.lifetimeMs += kAoeLifetimeBonusMs; // model the full blast window
+        }
 
         if (!std::isfinite(threat.lifetimeMs) || threat.lifetimeMs <= 0.0f ||
             threat.lifetimeMs > 125000.0f || threat.startTime <= 0 ||
             !threat.visible)
             continue;
-        if (threat.objectType != 14174 &&
+        // AoE never expires on the timer; live shots drop once past their lifetime.
+        if (!isAoe &&
             static_cast<float>(gameTime) > threat.startTime + threat.lifetimeMs)
             continue;
+
+        // Pass-through-walls flag (proj+280 -> +369). Read only after the validity
+        // gates above, and only through a sane pointer - during a map enter/exit the
+        // projectile record can be half-built and proj+280 garbage.
+        const uintptr_t pprops = *reinterpret_cast<uintptr_t*>(projectile + 280);
+        const bool passThrough =
+            pprops > 0xFFFF && *reinterpret_cast<uint8_t*>(pprops + 369) != 0;
 
         int samples = static_cast<int>(threat.lifetimeMs);
         samples = std::clamp(samples, 1, 300);
         const float interval = threat.lifetimeMs / static_cast<float>(samples);
         threat.path.reserve(samples + 1);
+        bool truncated = false;
         for (int i = 0; i < samples; ++i) {
             Vec2 position{};
             const float future = static_cast<float>(i) * interval;
             if (!ProjectilePosition(projectile, future, position)) break;
+            if (ProjectileBlockedByWall(position, passThrough)) {
+                truncated = true;  // path stops at the wall; don't add the endpoint
+                break;
+            }
             threat.path.push_back({position, static_cast<int>(future)});
             threat.minX = std::min(threat.minX, position.x);
             threat.maxX = std::max(threat.maxX, position.x);
@@ -327,7 +364,7 @@ void GatherThreats(std::vector<Threat>& threats, int gameTime) {
             threat.maxY = std::max(threat.maxY, position.y);
         }
         Vec2 finalPosition{};
-        if (ProjectilePosition(projectile, threat.lifetimeMs, finalPosition)) {
+        if (!truncated && ProjectilePosition(projectile, threat.lifetimeMs, finalPosition)) {
             threat.path.push_back({finalPosition, static_cast<int>(threat.lifetimeMs)});
             threat.minX = std::min(threat.minX, finalPosition.x);
             threat.maxX = std::max(threat.maxX, finalPosition.x);

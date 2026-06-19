@@ -1,5 +1,6 @@
 #include "menu.h"
 #include "config.h"
+#include "skin_catalog.h"
 #include "imgui.h"
 
 #include <windows.h>
@@ -282,9 +283,29 @@ namespace menu {
             ImGui::InputText("New Name", g_cfg.spoofNameValue,
                              sizeof(g_cfg.spoofNameValue));
             ImGui::TextDisabled("Client-side display spoof; longer names are truncated.");
+            ImGui::Checkbox("Guild Name", &g_cfg.spoofGuildName);
+            ImGui::InputText("New Guild Name", g_cfg.guildNameValue,
+                             sizeof(g_cfg.guildNameValue));
+            ImGui::TextDisabled("Only works while in a guild; capped to your real name length.");
+            ImGui::Checkbox("Guild Rank", &g_cfg.spoofGuildRank);
+            if (g_cfg.spoofGuildRank) {
+                const char* ranks[] = { "Initiate", "Member", "Officer",
+                                        "Leader", "Founder" };
+                ImGui::Combo("Rank", &g_cfg.guildRankValue, ranks, 5);
+            }
             ImGui::Checkbox("Stars", &g_cfg.stars);
             if (g_cfg.stars)
                 ImGui::SliderInt("Stars Value", &g_cfg.starsValue, 0, 100);
+            ImGui::Separator();
+            ImGui::TextUnformatted("Appearance");
+            ImGui::Checkbox("Skin Changer", &g_cfg.skinChanger);
+            ImGui::InputInt("Skin ID", &g_cfg.skinId);
+            skin_catalog::Render(g_cfg.skinId);
+            ImGui::Checkbox("Dye Changer", &g_cfg.dyeChanger);
+            ImGui::InputInt("Dye/Cloth ID", &g_cfg.dyeId);
+            ImGui::Checkbox("Accessory Dye Changer", &g_cfg.accessoryDyeChanger);
+            ImGui::InputInt("Accessory Dye/Cloth ID", &g_cfg.accessoryDyeId);
+            ImGui::TextDisabled("IDs from realm.wiki; client-side only.");
             ImGui::Separator();
             ImGui::Checkbox("Enable Glow", &g_cfg.enableGlow);
             ImGui::ColorEdit4("Outline", g_cfg.glowOutline);

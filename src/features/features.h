@@ -22,3 +22,8 @@ namespace hud       { void Tick(); }
 namespace socketfu  { void Install(); void Tick(); }
 namespace lagport   { void Install(); void Tick(); bool FreezeActive(); }
 namespace teleport  { void Install(); void Tick(); void Poll(); }
+namespace render_projectiles { void Install(); void Tick(); }
+namespace render_tiles       { void Tick(); }
+namespace render_hitbox      { void Tick(); }
+namespace render_safety      { void Tick(); }
+namespace render_units_grid  { void Tick(); }

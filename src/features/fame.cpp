@@ -141,8 +141,34 @@ CHARACTER_PLAYER_HOOK(4)
 CHARACTER_PLAYER_HOOK(5)
 #undef CHARACTER_PLAYER_HOOK
 
+// sub_180086880: overwrite a string stat's value object in place (il2cpp string:
+// length at +0x10, UTF-16 chars at +0x14). The original requires the existing
+// length to be 2..24; we additionally never write past it, so we can't overflow
+// the string's buffer even if our text is longer.
+void WriteStatString(uintptr_t stat, const char* text) {
+    const uintptr_t strObj = *reinterpret_cast<uintptr_t*>(stat + 0x18);
+    if (strObj <= 0xFFFF || !text)
+        return;
+    __try {
+        const int cap = *reinterpret_cast<int*>(strObj + 0x10);
+        if (cap < 2 || cap > 24)
+            return;
+        int n = 0;
+        while (text[n] && n < cap)
+            ++n;
+        for (int i = 0; i < n; ++i)
+            *reinterpret_cast<uint16_t*>(strObj + 0x14 + 2ull * i) =
+                static_cast<uint16_t>(static_cast<unsigned char>(text[i]));
+        *reinterpret_cast<int*>(strObj + 0x10) = n;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+}
+
 void RewriteSelectedStats(uintptr_t packet) {
-    if (!packet || (!g_cfg.stars && !g_cfg.accountFame))
+    if (!packet || (!g_cfg.stars && !g_cfg.accountFame &&
+                    !g_cfg.spoofGuildName && !g_cfg.spoofGuildRank &&
+                    !g_cfg.skinChanger && !g_cfg.dyeChanger &&
+                    !g_cfg.accessoryDyeChanger))
         return;
 
     uintptr_t outerData = 0;
@@ -179,6 +205,18 @@ void RewriteSelectedStats(uintptr_t packet) {
             } else if (type == 39 && g_cfg.accountFame) {
                 *reinterpret_cast<int*>(stat + 0x14) =
                     static_cast<int>(g_cfg.accountFameValue);
+            } else if (type == 63 && g_cfg.spoofGuildRank) {
+                *reinterpret_cast<int*>(stat + 0x14) = g_cfg.guildRankValue;
+            } else if (type == 62 && g_cfg.spoofGuildName &&
+                       g_cfg.guildNameValue[0]) {
+                WriteStatString(stat, g_cfg.guildNameValue);
+            } else if (type == 25 && g_cfg.skinChanger && g_cfg.skinId) {
+                *reinterpret_cast<int*>(stat + 0x14) = g_cfg.skinId;
+            } else if (type == 32 && g_cfg.dyeChanger && g_cfg.dyeId) {
+                *reinterpret_cast<int*>(stat + 0x14) = g_cfg.dyeId;
+            } else if (type == 33 && g_cfg.accessoryDyeChanger &&
+                       g_cfg.accessoryDyeId) {
+                *reinterpret_cast<int*>(stat + 0x14) = g_cfg.accessoryDyeId;
             }
         }
     }

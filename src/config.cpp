@@ -158,6 +158,13 @@ void Config_Load() {
     CFG_BOOL(showFpm); CFG_BOOL(spoofName);
     ReadString("spoofNameValue", g_cfg.spoofNameValue,
                sizeof(g_cfg.spoofNameValue));
+    CFG_BOOL(spoofGuildName);
+    ReadString("guildNameValue", g_cfg.guildNameValue,
+               sizeof(g_cfg.guildNameValue));
+    CFG_BOOL(spoofGuildRank); CFG_INT(guildRankValue);
+    CFG_BOOL(skinChanger); CFG_INT(skinId);
+    CFG_BOOL(dyeChanger); CFG_INT(dyeId);
+    CFG_BOOL(accessoryDyeChanger); CFG_INT(accessoryDyeId);
     CFG_BOOL(stars); CFG_INT(starsValue);
     CFG_BOOL(fameValue); CFG_FLOAT(fameValueAmount);
     CFG_BOOL(accountFame); CFG_FLOAT(accountFameValue);
@@ -167,6 +174,7 @@ void Config_Load() {
     g_cfg.magnetAimRange = std::clamp(g_cfg.magnetAimRange, 1.0f, 2.25f);
     g_cfg.autoNexusHpPercent = std::clamp(g_cfg.autoNexusHpPercent, 0.0f, 99.99f);
     g_cfg.starsValue = std::clamp(g_cfg.starsValue, 0, 100);
+    g_cfg.guildRankValue = std::clamp(g_cfg.guildRankValue, 0, 4);
 }
 
 void Config_Save() {
@@ -223,6 +231,12 @@ void Config_Save() {
     SaveColor("glowColor", g_cfg.glowColor);
     SAVE_BOOL(showFpm); SAVE_BOOL(spoofName);
     WriteString("spoofNameValue", g_cfg.spoofNameValue);
+    SAVE_BOOL(spoofGuildName);
+    WriteString("guildNameValue", g_cfg.guildNameValue);
+    SAVE_BOOL(spoofGuildRank); SAVE_INT(guildRankValue);
+    SAVE_BOOL(skinChanger); SAVE_INT(skinId);
+    SAVE_BOOL(dyeChanger); SAVE_INT(dyeId);
+    SAVE_BOOL(accessoryDyeChanger); SAVE_INT(accessoryDyeId);
     SAVE_BOOL(stars); SAVE_INT(starsValue);
     SAVE_BOOL(fameValue); SAVE_FLOAT(fameValueAmount);
     SAVE_BOOL(accountFame); SAVE_FLOAT(accountFameValue);

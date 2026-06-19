@@ -114,6 +114,16 @@ struct Config {
     bool  showFpm = false;
     bool  spoofName = false;
     char  spoofNameValue[25] = {};
+    bool  spoofGuildName = false;
+    char  guildNameValue[25] = {};
+    bool  spoofGuildRank = false;
+    int   guildRankValue = 0;       // 0 Initiate .. 4 Founder (stat 63)
+    bool  skinChanger = false;
+    int   skinId = 0;               // stat 25
+    bool  dyeChanger = false;
+    int   dyeId = 0;                // stat 32 (cloth dye)
+    bool  accessoryDyeChanger = false;
+    int   accessoryDyeId = 0;       // stat 33 (accessory dye)
     bool  stars = false;
     int   starsValue = 0;
     bool  fameValue = false;

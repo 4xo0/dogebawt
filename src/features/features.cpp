@@ -33,6 +33,8 @@ namespace features {
         socketfu::Install();
         DBLOG("InstallAll: lagport::Install");
         lagport::Install();
+        DBLOG("InstallAll: render_projectiles::Install");
+        render_projectiles::Install();
         DBLOG("InstallAll: MH_EnableHook(ALL)");
         MH_STATUS st = MH_EnableHook(MH_ALL_HOOKS);
         DBLOG("InstallAll: MH_EnableHook returned %d", (int)st);
@@ -65,6 +67,16 @@ namespace features {
         socketfu::Tick();
         if (firstTick) DBLOG("Tick#1: lagport");
         lagport::Tick();
+        if (firstTick) DBLOG("Tick#1: render projectiles/aoe");
+        render_projectiles::Tick();
+        if (firstTick) DBLOG("Tick#1: render tiles");
+        render_tiles::Tick();
+        if (firstTick) DBLOG("Tick#1: render hitbox");
+        render_hitbox::Tick();
+        if (firstTick) DBLOG("Tick#1: render safety");
+        render_safety::Tick();
+        if (firstTick) DBLOG("Tick#1: render units/grid");
+        render_units_grid::Tick();
         if (firstTick) { DBLOG("Tick#1: complete"); firstTick = false; }
     }
 
