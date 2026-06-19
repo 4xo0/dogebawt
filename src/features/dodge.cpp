@@ -224,6 +224,43 @@ bool ShooterVisible(int attacker, const VisibilityMap& visibility) {
     return true;
 }
 
+std::vector<Vec2> GatherEnemies() {
+    std::vector<Vec2> enemies;
+    if (g_cfg.dodgeKeepDistance <= 0.0f)
+        return enemies;
+
+    const uintptr_t root = game::Root();
+    const uintptr_t world = root ? *reinterpret_cast<uintptr_t*>(root + 40) : 0;
+    const uintptr_t manager = world ? *reinterpret_cast<uintptr_t*>(world + 176) : 0;
+    const uintptr_t list = manager ? *reinterpret_cast<uintptr_t*>(manager + 24) : 0;
+    if (!list) return enemies;
+
+    const uint32_t count = *reinterpret_cast<uint32_t*>(list + 24);
+    if (!count || count >= 20000) return enemies;
+    enemies.reserve(std::min<uint32_t>(count, 256));
+
+    for (uint32_t i = 0; i < count; ++i) {
+        const uintptr_t object = *reinterpret_cast<uintptr_t*>(list + 48 + 24ull * i);
+        if (!object) continue;
+        if (*reinterpret_cast<int*>(object + 0x20C) <= 0) continue; // hp
+        const uintptr_t status = *reinterpret_cast<uintptr_t*>(object + 0x18);
+        if (!status || *reinterpret_cast<uint8_t*>(status + 1745) == 0) continue;
+        enemies.push_back({ *reinterpret_cast<float*>(object + 0x3C),
+                            *reinterpret_cast<float*>(object + 0x40) });
+    }
+    return enemies;
+}
+
+float EnemyClearance(Vec2 p, const std::vector<Vec2>& enemies) {
+    float best = std::numeric_limits<float>::infinity();
+    for (const Vec2& e : enemies) {
+        const float dx = e.x - p.x;
+        const float dy = e.y - p.y;
+        best = std::min(best, std::sqrt(dx * dx + dy * dy));
+    }
+    return best;
+}
+
 bool ProjectilePosition(uintptr_t projectile, float futureMs, Vec2& out) {
     auto fn = reinterpret_cast<ProjectilePositionFn>(ga::Rva(kProjectilePositionRva));
     if (!fn) return false;
@@ -438,7 +475,8 @@ Ring BuildRing(Vec2 center, float scale, float density, int gameTime,
 // then commit the candidate from the INNERMOST band (ring0) that best trades off
 // closeness to that attractor against safe time.
 Candidate ChooseCandidate(Vec2 center, int gameTime,
-                          const std::vector<Threat>& threats) {
+                          const std::vector<Threat>& threats,
+                          const std::vector<Vec2>& enemies) {
     const Ring rings[] = {
         BuildRing(center, 0.5f, 2.0f, gameTime, threats),
         BuildRing(center, 1.0f, 1.0f, gameTime, threats),
@@ -462,6 +500,23 @@ Candidate ChooseCandidate(Vec2 center, int gameTime,
         if (score > bestScore) {
             bestScore = score;
             best = candidate;
+        }
+    }
+
+    // Keep-distance pass: among ring0 candidates that are at LEAST as
+    // projectile-safe as the pick, prefer the one furthest from enemies. This
+    // never trades away projectile safety - it only breaks ties toward open
+    // space, so the dodge naturally drifts away from units.
+    if (!enemies.empty()) {
+        float bestClearance = EnemyClearance(best.position, enemies);
+        for (const Candidate& candidate : rings[0].candidates) {
+            if (!candidate.legal || candidate.safeForMs < best.safeForMs)
+                continue;
+            const float clearance = EnemyClearance(candidate.position, enemies);
+            if (clearance > bestClearance) {
+                bestClearance = clearance;
+                best = candidate;
+            }
         }
     }
     return best;
@@ -506,12 +561,26 @@ int64_t __fastcall HookMoveUpdate(uintptr_t player, float targetX, float targetY
     std::vector<Threat> threats;
     GatherThreats(threats, gameTime);
 
+    // Keep-distance: a cell inside the enemy buffer counts as "not safe" so the
+    // same escape machinery that dodges projectiles also walks us out of melee
+    // range. Empty enemy list (slider 0) makes every InBuffer() false, so the
+    // logic below collapses to the untouched projectile dodge.
+    const std::vector<Vec2> enemies = GatherEnemies();
+    const float keep = g_cfg.dodgeKeepDistance;
+    auto InBuffer = [&](Vec2 p) {
+        return keep > 0.0f && !enemies.empty() &&
+               EnemyClearance(p, enemies) < keep;
+    };
+    const bool currentInBuffer = InBuffer(current);
+
     // Danger gates (sub_1800D2AC0): time-to-hit for the current cell and for the
     // requested destination.
     unsigned currentSafeFor = kNoThreatTime;
-    const bool currentSafe = PositionSafe(current, gameTime, threats, currentSafeFor);
+    const bool currentSafe =
+        PositionSafe(current, gameTime, threats, currentSafeFor) && !currentInBuffer;
     unsigned requestedSafeFor = kNoThreatTime;
-    const bool requestedSafe = PositionSafe(requested, gameTime, threats, requestedSafeFor);
+    const bool requestedSafe =
+        PositionSafe(requested, gameTime, threats, requestedSafeFor) && !InBuffer(requested);
 
     // Requested destination is safe -> let the move through untouched.
     if (requestedSafe)
@@ -521,21 +590,24 @@ int64_t __fastcall HookMoveUpdate(uintptr_t player, float targetX, float targetY
 
     if (currentSafe) {
         // Current cell is safe but the requested one is not: cancel the move if
-        // the requested cell gets hit before the player could cross half a
-        // hitbox; otherwise allow it (the move only grazes the danger).
+        // it would step into the enemy buffer, or if the requested cell gets hit
+        // before the player could cross half a hitbox; otherwise allow it (the
+        // move only grazes the danger).
         Vec2 output = requested;
-        if (g_cfg.dodgeHitboxSize / speed > static_cast<float>(requestedSafeFor))
+        if (InBuffer(requested) ||
+            g_cfg.dodgeHitboxSize / speed > static_cast<float>(requestedSafeFor))
             output = current;
         return g_originalMoveUpdate ? g_originalMoveUpdate(player, output.x, -output.y) : 0;
     }
 
     // Current cell is unsafe -> ring-sample an escape and step toward it.
-    const Candidate chosen = ChooseCandidate(current, gameTime, threats);
+    const Candidate chosen = ChooseCandidate(current, gameTime, threats, enemies);
     Vec2 output = requested;
     if (chosen.position.x != 0.0f || chosen.position.y != 0.0f) {
         const float distance = Distance(current, chosen.position);
         const int travelMs = static_cast<int>(distance / speed);
-        if (static_cast<int>(requestedSafeFor) - g_cfg.dodgeMoveAwayMs <= travelMs) {
+        if (currentInBuffer ||
+            static_cast<int>(requestedSafeFor) - g_cfg.dodgeMoveAwayMs <= travelMs) {
             const float fraction =
                 distance > 0.0f
                     ? std::min(1.0f, static_cast<float>(frameMs) * speed / distance)

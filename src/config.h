@@ -75,6 +75,7 @@ struct Config {
     bool  dodgeAoeBombs = true;
     bool  dodgeAvoidUnits = true;
     float dodgeUnitAvoidanceScale = 1.0f;
+    float dodgeKeepDistance = 0.0f;     // keep this many tiles from enemies (0 = off)
     bool  oldDodgeLogic = false;
     bool  teleportIfOutOfRange = false;
     bool  nexusWhenLost = false;

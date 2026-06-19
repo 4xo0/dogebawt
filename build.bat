@@ -57,4 +57,7 @@ set "result=%errorlevel%"
 popd
 
 if not "%result%"=="0" exit /b %result%
+if not exist "%out%\font" mkdir "%out%\font"
+copy /Y "%root%vendor\font\PixelOperator.ttf" "%out%\font\PixelOperator.ttf" >nul
+copy /Y "%root%vendor\font\PixelOperator-Bold.ttf" "%out%\font\PixelOperator-Bold.ttf" >nul
 echo [build] %out%\dogebawt.dll

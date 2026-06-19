@@ -9,6 +9,8 @@
 #include "imgui_impl_win32.h"
 
 #include <windows.h>
+#include <cstdio>
+#include <cstring>
 
 extern int g_viewW, g_viewH;
 
@@ -78,10 +80,30 @@ namespace overlay {
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
         const UINT dpi = GetDpiForWindow(s_hwnd);
-        const float fontSize = 12.0f * (dpi ? static_cast<float>(dpi) / 96.0f : 1.0f);
+        const float dpiScale = dpi ? static_cast<float>(dpi) / 96.0f : 1.0f;
+        const float fontSize = 16.0f * dpiScale;
         ImFontConfig fontCfg{};
         fontCfg.SizePixels = fontSize;
-        io.FontDefault = io.Fonts->AddFontDefault(&fontCfg);
+        fontCfg.OversampleH = 1;
+        fontCfg.OversampleV = 1;
+        fontCfg.PixelSnapH = true;
+
+        char dllPath[MAX_PATH]{};
+        char normalPath[MAX_PATH]{};
+        char boldPath[MAX_PATH]{};
+        HMODULE self = GetModuleHandleA("dogebawt.dll");
+        GetModuleFileNameA(self, dllPath, MAX_PATH);
+        char* slash = std::strrchr(dllPath, '\\');
+        if (slash) *slash = '\0';
+        std::snprintf(normalPath, sizeof(normalPath), "%s\\font\\PixelOperator.ttf", dllPath);
+        std::snprintf(boldPath, sizeof(boldPath), "%s\\font\\PixelOperator-Bold.ttf", dllPath);
+
+        ImFont* normal = io.Fonts->AddFontFromFileTTF(normalPath, fontSize, &fontCfg);
+        ImFont* bold = io.Fonts->AddFontFromFileTTF(boldPath, fontSize, &fontCfg);
+        if (!normal) normal = io.Fonts->AddFontDefault(&fontCfg);
+        if (!bold) bold = normal;
+        io.FontDefault = normal;
+        menu::SetFonts(normal, bold);
 
         if (!ImGui_ImplWin32_Init(s_hwnd) || !ImGui_ImplDX11_Init(s_device, s_ctx)) {
             ImGui_ImplDX11_Shutdown();

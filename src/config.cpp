@@ -138,7 +138,8 @@ void Config_Load() {
     g_cfg.dodgingHotkey.vk = ReadInt("dodgingHotkey", g_cfg.dodgingHotkey.vk);
     CFG_BOOL(dodgeInvisible); CFG_BOOL(butterWalk); CFG_FLOAT(dodgeHitboxSize);
     CFG_INT(dodgeMoveAwayMs); CFG_BOOL(dodgeAoeBombs); CFG_BOOL(dodgeAvoidUnits);
-    CFG_FLOAT(dodgeUnitAvoidanceScale); CFG_BOOL(oldDodgeLogic);
+    CFG_FLOAT(dodgeUnitAvoidanceScale); CFG_FLOAT(dodgeKeepDistance);
+    CFG_BOOL(oldDodgeLogic);
     CFG_BOOL(teleportIfOutOfRange); CFG_BOOL(nexusWhenLost); CFG_FLOAT(dogeTeleportMax);
     g_cfg.tpCaptureHotkey.vk = ReadInt("tpCaptureHotkey", g_cfg.tpCaptureHotkey.vk);
     g_cfg.tpReturnHotkey.vk = ReadInt("tpReturnHotkey", g_cfg.tpReturnHotkey.vk);
@@ -203,7 +204,8 @@ void Config_Save() {
     WriteInt("dodgingHotkey", g_cfg.dodgingHotkey.vk);
     SAVE_BOOL(dodgeInvisible); SAVE_BOOL(butterWalk); SAVE_FLOAT(dodgeHitboxSize);
     SAVE_INT(dodgeMoveAwayMs); SAVE_BOOL(dodgeAoeBombs); SAVE_BOOL(dodgeAvoidUnits);
-    SAVE_FLOAT(dodgeUnitAvoidanceScale); SAVE_BOOL(oldDodgeLogic);
+    SAVE_FLOAT(dodgeUnitAvoidanceScale); SAVE_FLOAT(dodgeKeepDistance);
+    SAVE_BOOL(oldDodgeLogic);
     SAVE_BOOL(teleportIfOutOfRange); SAVE_BOOL(nexusWhenLost); SAVE_FLOAT(dogeTeleportMax);
     WriteInt("tpCaptureHotkey", g_cfg.tpCaptureHotkey.vk);
     WriteInt("tpReturnHotkey", g_cfg.tpReturnHotkey.vk);

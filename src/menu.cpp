@@ -4,12 +4,93 @@
 
 #include <windows.h>
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 
 namespace menu {
     namespace {
         bool s_open = false;
         DWORD s_lastToggle = 0;
+        int s_activeTab = 1;
+        ImFont* s_normalFont = nullptr;
+        ImFont* s_boldFont = nullptr;
+
+        constexpr ImU32 kWhite = IM_COL32(245, 242, 245, 255);
+        constexpr ImU32 kBlack = IM_COL32(25, 17, 25, 255);
+        constexpr ImU32 kPurple = IM_COL32(194, 47, 174, 255);
+
+        void PixelRect(ImDrawList* dl, ImVec2 p, float x, float y, float w, float h, ImU32 color) {
+            dl->AddRectFilled(ImVec2(p.x + x, p.y + y), ImVec2(p.x + x + w, p.y + y + h), color);
+        }
+
+        void DrawIcon(ImDrawList* dl, ImVec2 p, int icon) {
+            const float s = 1.0f;
+            if (icon == 0) { // crossed tools
+                dl->AddLine(ImVec2(p.x+5,p.y+5), ImVec2(p.x+25,p.y+25), kBlack, 7);
+                dl->AddLine(ImVec2(p.x+25,p.y+5), ImVec2(p.x+7,p.y+25), kBlack, 7);
+                dl->AddLine(ImVec2(p.x+5,p.y+5), ImVec2(p.x+25,p.y+25), IM_COL32(100,100,105,255), 3);
+                dl->AddLine(ImVec2(p.x+25,p.y+5), ImVec2(p.x+7,p.y+25), kPurple, 3);
+            } else if (icon == 1) { // nexus temple
+                dl->AddTriangleFilled(ImVec2(p.x+16,p.y+3), ImVec2(p.x+3,p.y+12), ImVec2(p.x+29,p.y+12), kWhite);
+                PixelRect(dl,p,5,12,22,4,kBlack); PixelRect(dl,p,7,14,4,12,kWhite);
+                PixelRect(dl,p,14,14,4,12,kWhite); PixelRect(dl,p,21,14,4,12,kWhite);
+                PixelRect(dl,p,4,26,24,4,kWhite);
+            } else if (icon == 2) { // aim reticle
+                dl->AddRect(ImVec2(p.x+3,p.y+3), ImVec2(p.x+12,p.y+12), kWhite, 2.0f, ImDrawFlags_None, 4.0f);
+                dl->AddRect(ImVec2(p.x+20,p.y+3), ImVec2(p.x+29,p.y+12), kWhite, 2.0f, ImDrawFlags_None, 4.0f);
+                dl->AddRect(ImVec2(p.x+3,p.y+20), ImVec2(p.x+12,p.y+29), kWhite, 2.0f, ImDrawFlags_None, 4.0f);
+                dl->AddRect(ImVec2(p.x+20,p.y+20), ImVec2(p.x+29,p.y+29), kWhite, 2.0f, ImDrawFlags_None, 4.0f);
+                dl->AddRectFilled(ImVec2(p.x+13,p.y+13), ImVec2(p.x+19,p.y+19), kPurple);
+            } else if (icon == 3) { // cursor + TP
+                dl->AddTriangleFilled(ImVec2(p.x+4,p.y+3), ImVec2(p.x+5,p.y+27), ImVec2(p.x+12,p.y+19), kWhite);
+                dl->AddLine(ImVec2(p.x+5,p.y+3), ImVec2(p.x+5,p.y+27), kBlack, 2);
+                dl->AddText(ImVec2(p.x+14,p.y+4), kPurple, "TP");
+            } else if (icon == 4) { // WASD
+                const char* keys[] = {"W","A","S","D"};
+                const ImVec2 pos[] = {{11,2},{2,16},{11,16},{20,16}};
+                for (int i=0;i<4;++i) {
+                    dl->AddRectFilled(ImVec2(p.x+pos[i].x,p.y+pos[i].y), ImVec2(p.x+pos[i].x+9,p.y+pos[i].y+12), kWhite, 1);
+                    dl->AddText(ImVec2(p.x+pos[i].x+1,p.y+pos[i].y-1), kBlack, keys[i]);
+                }
+            } else if (icon == 5) { // follow: original-style door/arrow, not generated sprite #6
+                dl->AddRectFilled(ImVec2(p.x+5,p.y+5), ImVec2(p.x+21,p.y+27), kWhite);
+                dl->AddRect(ImVec2(p.x+5,p.y+5), ImVec2(p.x+21,p.y+27), kBlack, 0.0f, ImDrawFlags_None, 3.0f);
+                dl->AddLine(ImVec2(p.x+11,p.y+16), ImVec2(p.x+29,p.y+8), IM_COL32(62,210,79,255), 4);
+                dl->AddTriangleFilled(ImVec2(p.x+29,p.y+8), ImVec2(p.x+20,p.y+7), ImVec2(p.x+27,p.y+16), IM_COL32(62,210,79,255));
+            } else if (icon == 6 || icon == 7) { // gears
+                dl->AddCircleFilled(ImVec2(p.x+16,p.y+16), 13, kWhite, 12);
+                dl->AddCircleFilled(ImVec2(p.x+16,p.y+16), 7, kBlack, 12);
+                dl->AddCircleFilled(ImVec2(p.x+16,p.y+16), 4, kPurple, 12);
+                for (int i=0;i<8;++i) {
+                    const float a = i * 0.785398f;
+                    ImVec2 c(p.x+16+std::cos(a)*13, p.y+16+std::sin(a)*13);
+                    dl->AddRectFilled(ImVec2(c.x-3,c.y-3), ImVec2(c.x+3,c.y+3), kWhite);
+                }
+            } else { // raven silhouette
+                dl->AddCircleFilled(ImVec2(p.x+18,p.y+18), 10, kBlack, 10);
+                dl->AddTriangleFilled(ImVec2(p.x+8,p.y+13), ImVec2(p.x+2,p.y+8), ImVec2(p.x+12,p.y+7), kBlack);
+                dl->AddTriangleFilled(ImVec2(p.x+20,p.y+8), ImVec2(p.x+24,p.y+2), ImVec2(p.x+26,p.y+11), kBlack);
+                PixelRect(dl,p,17,27,3,4,kBlack); PixelRect(dl,p,23,27,3,4,kBlack);
+            }
+            (void)s;
+        }
+
+        bool SidebarButton(const char* label, int tab, float width) {
+            ImGui::PushID(tab);
+            const ImVec2 pos = ImGui::GetCursorScreenPos();
+            const ImVec2 size(width, 50.0f);
+            const bool pressed = ImGui::InvisibleButton("##side", size);
+            const bool hovered = ImGui::IsItemHovered();
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            ImU32 bg = s_activeTab == tab ? IM_COL32(239, 83, 188, 255)
+                       : hovered ? IM_COL32(220, 65, 174, 255) : IM_COL32(205, 52, 160, 255);
+            dl->AddRectFilled(pos, ImVec2(pos.x+size.x,pos.y+size.y), bg);
+            ImFont* font = s_boldFont ? s_boldFont : ImGui::GetFont();
+            dl->AddText(font, font->LegacySize, ImVec2(pos.x+17,pos.y+15), kWhite, label);
+            if (pressed) s_activeTab = tab;
+            ImGui::PopID();
+            return pressed;
+        }
 
         ImVec4 Color(const float (&v)[4]) { return ImVec4(v[0], v[1], v[2], v[3]); }
 
@@ -130,6 +211,7 @@ namespace menu {
             ImGui::Checkbox("Dodge AoE/Bombs", &g_cfg.dodgeAoeBombs);
             ImGui::Checkbox("Avoid Units", &g_cfg.dodgeAvoidUnits);
             ImGui::SliderFloat("Unit Avoidance Scale", &g_cfg.dodgeUnitAvoidanceScale, 0.0f, 1.5f, "%.2f");
+            ImGui::SliderFloat("Keep Distance From Enemies (tiles)", &g_cfg.dodgeKeepDistance, 0.0f, 8.0f, "%.1f");
             ImGui::Checkbox("Old Dodge Logic (don't use this)", &g_cfg.oldDodgeLogic);
         }
 
@@ -243,33 +325,37 @@ namespace menu {
 
     void SetOpen(bool open) { s_open = open; }
     bool IsOpen() { return s_open; }
+    void SetFonts(ImFont* normal, ImFont* bold) {
+        s_normalFont = normal;
+        s_boldFont = bold;
+    }
 
     void ApplyTheme(int) {
         ImGui::StyleColorsDark();
         ImGuiStyle& style = ImGui::GetStyle();
-        style.WindowRounding = 0.0f;
+        style.WindowRounding = 7.0f;
         style.ChildRounding = 0.0f;
-        style.FrameRounding = 3.0f;
-        style.GrabRounding = 3.0f;
-        style.WindowPadding = ImVec2(10.0f, 10.0f);
+        style.FrameRounding = 0.0f;
+        style.GrabRounding = 0.0f;
+        style.WindowPadding = ImVec2(0.0f, 0.0f);
         style.FramePadding = ImVec2(6.0f, 4.0f);
-        style.ItemSpacing = ImVec2(8.0f, 5.0f);
+        style.ItemSpacing = ImVec2(7.0f, 5.0f);
 
         ImVec4* c = style.Colors;
         c[ImGuiCol_Text] = Color(g_cfg.colorText);
-        c[ImGuiCol_WindowBg] = g_cfg.menuBackground ? Color(g_cfg.colorMenuBackground) : ImVec4(0, 0, 0, 0);
-        c[ImGuiCol_ChildBg] = g_cfg.sideBarBackground ? Color(g_cfg.colorSidebar) : ImVec4(0, 0, 0, 0);
-        c[ImGuiCol_TitleBg] = Color(g_cfg.colorSidebar);
-        c[ImGuiCol_TitleBgActive] = g_cfg.titleBarActive ? Color(g_cfg.colorTitleActive) : Color(g_cfg.colorSidebar);
-        c[ImGuiCol_FrameBg] = Color(g_cfg.colorSidebar);
-        c[ImGuiCol_FrameBgHovered] = Color(g_cfg.colorHover);
-        c[ImGuiCol_FrameBgActive] = Color(g_cfg.colorActive);
-        c[ImGuiCol_Button] = Color(g_cfg.colorBase);
-        c[ImGuiCol_ButtonHovered] = Color(g_cfg.colorHover);
-        c[ImGuiCol_ButtonActive] = Color(g_cfg.colorActive);
-        c[ImGuiCol_CheckMark] = Color(g_cfg.colorCheck);
-        c[ImGuiCol_SliderGrab] = Color(g_cfg.colorBase);
-        c[ImGuiCol_SliderGrabActive] = Color(g_cfg.colorActive);
+        c[ImGuiCol_WindowBg] = ImVec4(0.15f, 0.06f, 0.14f, 0.96f);
+        c[ImGuiCol_ChildBg] = ImVec4(0.20f, 0.09f, 0.18f, 0.72f);
+        c[ImGuiCol_TitleBg] = ImVec4(0.35f, 0.08f, 0.38f, 1.0f);
+        c[ImGuiCol_TitleBgActive] = ImVec4(0.42f, 0.09f, 0.48f, 1.0f);
+        c[ImGuiCol_FrameBg] = ImVec4(0.68f, 0.08f, 0.48f, 0.95f);
+        c[ImGuiCol_FrameBgHovered] = ImVec4(0.86f, 0.18f, 0.65f, 1.0f);
+        c[ImGuiCol_FrameBgActive] = ImVec4(0.95f, 0.28f, 0.72f, 1.0f);
+        c[ImGuiCol_Button] = ImVec4(0.80f, 0.13f, 0.59f, 1.0f);
+        c[ImGuiCol_ButtonHovered] = ImVec4(0.92f, 0.25f, 0.71f, 1.0f);
+        c[ImGuiCol_ButtonActive] = ImVec4(0.72f, 0.08f, 0.50f, 1.0f);
+        c[ImGuiCol_CheckMark] = ImVec4(0.18f, 0.05f, 0.20f, 1.0f);
+        c[ImGuiCol_SliderGrab] = ImVec4(0.13f, 0.03f, 0.16f, 1.0f);
+        c[ImGuiCol_SliderGrabActive] = ImVec4(0.28f, 0.05f, 0.30f, 1.0f);
         c[ImGuiCol_Header] = Color(g_cfg.colorBase);
         c[ImGuiCol_HeaderHovered] = Color(g_cfg.colorHover);
         c[ImGuiCol_HeaderActive] = Color(g_cfg.colorActive);
@@ -287,37 +373,61 @@ namespace menu {
         ImGui::SetNextWindowSize(ImVec2(1120.0f * scale, 610.0f * scale), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSizeConstraints(ImVec2(760.0f * scale, 430.0f * scale), display);
 
-        const ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse;
-        if (!ImGui::Begin("DogeBawt", &s_open, flags)) {
+        const ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar;
+        if (!ImGui::Begin("##DogeBawt", &s_open, flags)) {
             ImGui::End();
             return;
         }
 
-        ImGui::TextUnformatted("Version v1.1.16");
-        ImGui::SameLine(ImGui::GetWindowWidth() - 120.0f);
-        if (ImGui::Button("Save Config", ImVec2(105.0f, 0.0f))) Config_Save();
-        ImGui::Separator();
+        const float winW = ImGui::GetWindowWidth();
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const ImVec2 wp = ImGui::GetWindowPos();
+        dl->AddRectFilled(wp, ImVec2(wp.x+winW,wp.y+22), IM_COL32(91,28,105,255), 7.0f, ImDrawFlags_RoundCornersTop);
+        dl->AddText(ImVec2(wp.x+7,wp.y+3), kWhite, "Version Private Build");
+        dl->AddText(ImVec2(wp.x+winW-18,wp.y+2), kWhite, "X");
 
-        if (ImGui::BeginTabBar("##Tabs", ImGuiTabBarFlags_FittingPolicyScroll)) {
-            if (ImGui::BeginTabItem("\t\tMods")) { ModsTab(); ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("\t\tAuto Nexus")) { NexusTab(); ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("\t\tAuto Aim")) { AimTab(); ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("\t\tLag Port")) {
+        ImGui::SetCursorPos(ImVec2(14, 31));
+        ImGui::SetCursorPos(ImVec2(17, 35));
+        if (s_boldFont) ImGui::PushFont(s_boldFont);
+        ImGui::SetWindowFontScale(1.65f);
+        ImGui::TextUnformatted("DogeBawt");
+        ImGui::SetWindowFontScale(1.0f);
+        if (s_boldFont) ImGui::PopFont();
+        ImGui::SetCursorPos(ImVec2(winW-137, 37));
+        if (ImGui::Button("Save Config", ImVec2(124, 28))) Config_Save();
+
+        const float sidebarW = 188.0f;
+        ImGui::SetCursorPos(ImVec2(15, 82));
+        ImGui::BeginChild("##sidebar", ImVec2(sidebarW, -12), false,
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        const char* labels[] = {"Mods","Auto Nexus","Auto Aim","Lag Port","Auto Dodge","Follow","Render","Spoofing","Debug / Misc"};
+        for (int i=0;i<9;++i) {
+            SidebarButton(labels[i], i, sidebarW-17);
+            ImGui::Dummy(ImVec2(0,5));
+        }
+        ImGui::EndChild();
+
+        ImGui::SetCursorPos(ImVec2(sidebarW+29, 83));
+        ImGui::BeginChild("##content", ImVec2(-18, -15), false);
+        switch (s_activeTab) {
+            case 0: ModsTab(); break;
+            case 1: NexusTab(); break;
+            case 2: AimTab(); break;
+            case 3:
                 ImGui::TextUnformatted("Lag Port Settings");
                 ImGui::Separator();
                 ImGui::Checkbox("Lag Port", &g_cfg.lagPort);
                 LabelHotkey("Lag Port Key (hold)", "lagPortHotkey", g_cfg.lagPortHotkey);
                 ImGui::TextWrapped("Holding the key freezes the client. Will lag client, "
                                    "don't use near projectiles otherwise you may die.");
-                ImGui::EndTabItem();
-            }
-            if (ImGui::BeginTabItem("\t\tAuto Dodge")) { DodgeTab(); ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("\t\tFollow")) { FollowTab(); ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("\t\tRender")) { RenderTab(); ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("\t\tSpoofer")) { SpooferTab(); ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("\t\tDebug / Misc")) { MiscTab(); ImGui::EndTabItem(); }
-            ImGui::EndTabBar();
+                break;
+            case 4: DodgeTab(); break;
+            case 5: FollowTab(); break;
+            case 6: RenderTab(); break;
+            case 7: SpooferTab(); break;
+            case 8: MiscTab(); break;
         }
+        ImGui::EndChild();
         ImGui::End();
     }
 }
